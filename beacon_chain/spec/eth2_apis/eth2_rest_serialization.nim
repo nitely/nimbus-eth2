@@ -84,6 +84,8 @@ RestJson.useDefaultSerializationFor(
   GetForkChoiceResponse,
   GetForkScheduleResponse,
   GetGenesisResponse,
+  GetHistoricalSummariesV1Response,
+  GetHistoricalSummariesV1ResponseElectra,
   GetKeystoresResponse,
   GetNextWithdrawalsResponse,
   GetPoolAttesterSlashingsResponse,
@@ -404,6 +406,8 @@ type
     DataOptimisticAndFinalizedObject |
     GetBlockV2Response |
     GetDistributedKeystoresResponse |
+    GetHistoricalSummariesV1Response |
+    GetHistoricalSummariesV1ResponseElectra |
     GetKeystoresResponse |
     GetRemoteKeystoresResponse |
     GetStateForkResponse |
