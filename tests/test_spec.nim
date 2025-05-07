@@ -1,5 +1,5 @@
 # beacon_chain
-# Copyright (c) 2018-2024 Status Research & Development GmbH
+# Copyright (c) 2018-2025 Status Research & Development GmbH
 # Licensed and distributed under either of
 #   * MIT license (license terms in the root directory or at https://opensource.org/licenses/MIT).
 #   * Apache v2 license (license terms in the root directory or at https://www.apache.org/licenses/LICENSE-2.0).
@@ -21,7 +21,7 @@ from ../beacon_chain/spec/state_transition import process_slots
 
 suite "Beacon state" & preset():
   setup:
-    let cfg = defaultRuntimeConfig
+    let cfg {.used.} = defaultRuntimeConfig
 
   test "Smoke test initialize_beacon_state_from_eth1" & preset():
     let state = newClone(initialize_beacon_state_from_eth1(
@@ -103,7 +103,6 @@ suite "Beacon state" & preset():
           makeInitialDeposits(SLOTS_PER_EPOCH, {}), {skipBlsValidation}))
       genBlock = get_initial_beacon_block(state[])
       cache: StateCache
-      info: ForkedEpochInfo
 
     check:
       state[].phase0Data.dependent_root(Epoch(0)) == genBlock.root
@@ -143,7 +142,6 @@ suite "Beacon state" & preset():
           makeInitialDeposits(SLOTS_PER_EPOCH, {}), {skipBlsValidation}))
       genBlock = get_initial_beacon_block(state[])
       cache: StateCache
-      info: ForkedEpochInfo
 
     check:
       state[].can_advance_slots(genBlock.root, Slot(0))
