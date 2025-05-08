@@ -169,10 +169,6 @@ type
         desc: "Output file where to write the initial state snapshot"
         name: "output-genesis" .}: OutFile
 
-      outputDepositTreeSnapshot* {.
-        desc: "Output file where to write the initial deposit tree snapshot"
-        name: "output-deposit-tree-snapshot" .}: OutFile
-
       outputBootstrapFile* {.
         desc: "Output file with list of bootstrap nodes for the network"
         name: "output-bootstrap-file" .}: OutFile
@@ -342,20 +338,6 @@ func `as`(blk: BlockObject, T: type fulu.ExecutionPayloadHeader): T =
     blob_gas_used: uint64 blk.blobGasUsed.getOrDefault(),
     excess_blob_gas: uint64 blk.excessBlobGas.getOrDefault())
 
-func createDepositContractSnapshot(
-    deposits: seq[DepositData],
-    blockHash: Eth2Digest,
-    blockHeight: uint64): DepositContractSnapshot =
-  var merkleizer = DepositsMerkleizer.init()
-  for i, deposit in deposits:
-    let htr = hash_tree_root(deposit)
-    merkleizer.addChunk(htr.data)
-
-  DepositContractSnapshot(
-    eth1Block: blockHash,
-    depositContractState: merkleizer.toDepositContractState,
-    blockHeight: blockHeight)
-
 proc writeValue*(writer: var JsonWriter, value: DateTime) {.
      raises: [IOError].} =
   writer.writeValue($value)
@@ -473,13 +455,6 @@ proc doCreateTestnet*(config: CliConfig,
     SSZ.saveFile(outSszGenesis, initialState[])
     info "SSZ genesis file written",
           path = outSszGenesis, fork = kind(typeof initialState[])
-
-    SSZ.saveFile(
-      config.outputDepositTreeSnapshot.string,
-      createDepositContractSnapshot(
-        deposits,
-        genesisExecutionPayloadHeader.block_hash,
-        genesisExecutionPayloadHeader.block_number).getTreeSnapshot())
 
     initialState[].genesis_validators_root
 
