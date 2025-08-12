@@ -291,6 +291,8 @@ proc storeBackfillBlock(
       res
     of VerifierError.Duplicate:
       res
+    of VerifierError.MissingSidecars:
+      res
   else:
     # Only store side cars after successfully establishing block viability.
     self.storeSidecars(sidecarsOpt)
@@ -851,4 +853,6 @@ proc addBlock*(
       # )
       err(res.error())
     of VerifierError.Duplicate:
+      err(res.error())
+    of VerifierError.MissingSidecars:
       err(res.error())
