@@ -395,6 +395,11 @@ func getColumnless*(
 ): Opt[ForkedSignedBeaconBlock] =
   quarantine.sidecarless.peek(root)
 
+func peekSidecarless*(
+    quarantine: var Quarantine, root: Eth2Digest
+): Opt[ForkedSignedBeaconBlock] =
+  quarantine.sidecarless.peek(root)
+
 iterator peekSidecarless*(quarantine: Quarantine): ForkedSignedBeaconBlock =
   for k, v in quarantine.sidecarless.pairs():
     yield v
