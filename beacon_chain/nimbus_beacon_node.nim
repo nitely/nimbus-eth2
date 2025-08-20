@@ -443,8 +443,8 @@ proc initFullNode(
     blockProcessor = BlockProcessor.new(
       config.dumpEnabled, config.dumpDirInvalid, config.dumpDirIncoming,
       batchVerifier, consensusManager, node.validatorMonitor,
-      blobQuarantine, dataColumnQuarantine, getBeaconTime, config.invalidBlockRoots)
-
+      blobQuarantine, dataColumnQuarantine, getBeaconTime,
+      config.invalidBlockRoots)
     blockVerifier = proc(signedBlock: ForkedSignedBeaconBlock,
                          blobs: Opt[BlobSidecars], maybeFinalized: bool):
         Future[Result[void, VerifierError]] {.async: (raises: [CancelledError], raw: true).} =
@@ -463,10 +463,26 @@ proc initFullNode(
                              maybeFinalized: bool):
         Future[Result[void, VerifierError]] {.async: (raises: [CancelledError]).} =
       withBlck(signedBlock):
-        when consensusFork >= ConsensusFork.Deneb:
+        when consensusFork >= ConsensusFork.Fulu:
+          let cres = dataColumnQuarantine[].popSidecars(forkyBlck.root, forkyBlck)
+          if cres.isSome():
+            await blockProcessor[].addBlock(MsgSource.gossip, signedBlock,
+                                            cres,
+                                            maybeFinalized = maybeFinalized)
+          else:
+            # We don't have all the columns for this block, so we have
+            # to put it in columnless quarantine.
+            if not quarantine[].addSidecarless(
+              dag.finalizedHead.slot, forkyBlck):
+              err(VerifierError.UnviableFork)
+            else:
+              err(VerifierError.MissingParent)
+
+        elif consensusFork in [ConsensusFork.Deneb, ConsensusFork.Electra]:
           let bres = blobQuarantine[].popSidecars(forkyBlck.root, forkyBlck)
           if bres.isSome():
-            await blockProcessor[].addBlock(MsgSource.gossip, signedBlock, bres,
+            await blockProcessor[].addBlock(MsgSource.gossip, signedBlock,
+                                            bres,
                                             maybeFinalized = maybeFinalized)
           else:
             # We don't have all the sidecars for this block, so we have
@@ -478,8 +494,7 @@ proc initFullNode(
               err(VerifierError.MissingParent)
         else:
           await blockProcessor[].addBlock(MsgSource.gossip, signedBlock,
-                                    Opt.none(BlobSidecars),
-                                    maybeFinalized = maybeFinalized)
+                                          maybeFinalized = maybeFinalized)
     rmanBlockLoader = proc(
         blockRoot: Eth2Digest): Opt[ForkedTrustedSignedBeaconBlock] =
       dag.getForkedBlock(blockRoot)
