@@ -1156,15 +1156,15 @@ func process_withdrawals*(
       HashList[PendingPartialWithdrawal, Limit PENDING_PARTIAL_WITHDRAWALS_LIMIT].init(
         state.pending_partial_withdrawals.asSeq[partial_withdrawals_count .. ^1])
   else:
-    let expected_withdrawals =
-      List[capella.Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD].init(
-        get_expected_withdrawals(state))
+    let expected_withdrawals = get_expected_withdrawals(state)
 
   when payload is ForkyExecutionPayloadHeader:
-    if not (payload.withdrawals_root == hash_tree_root(expected_withdrawals)):
+    if not (payload.withdrawals_root == hash_tree_root(
+        List[capella.Withdrawal, MAX_WITHDRAWALS_PER_PAYLOAD].init(
+          expected_withdrawals))):
       return err("process_withdrawals: withdrawals_root does not match expected withdrawals")
   else:
-    if payload.withdrawals.asSeq() != expected_withdrawals.distinctBase:
+    if payload.withdrawals.asSeq() != expected_withdrawals:
       return err("process_withdrawals: payload withdrawals don't match expected withdrawals")
 
   for withdrawal in expected_withdrawals:
