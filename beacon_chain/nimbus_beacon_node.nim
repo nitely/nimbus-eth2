@@ -2352,9 +2352,7 @@ proc run(node: BeaconNode) {.raises: [CatchableError].} =
 
   node.startLightClient()
   node.requestManager.start()
-  if node.network.getBeaconTime().slotOrZero.epoch >=
-      node.network.cfg.FULU_FORK_EPOCH:
-    node.validatorCustody.start()
+  node.validatorCustody.start()
   node.syncOverseer.start()
 
   waitFor node.updateGossipStatus(wallSlot)
