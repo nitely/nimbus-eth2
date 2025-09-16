@@ -716,6 +716,10 @@ else:
 
   # createConstantsFromPreset const_preset
 
+const
+  MIN_SECONDS_PER_SLOT* = 1'u64
+  MAX_SECONDS_PER_SLOT* = int64.high.uint64 div 1_000_000_000'u64
+
 const SLOTS_PER_SYNC_COMMITTEE_PERIOD* =
   SLOTS_PER_EPOCH * EPOCHS_PER_SYNC_COMMITTEE_PERIOD
 
@@ -882,13 +886,14 @@ proc readRuntimeConfig*(
           if not operator(distinctBase(value), distinctBase(constValue)):
             raise (ref PresetFileError)(msg:
               "Cannot override config" &
-              " (required: " & name & opDesc & $distinctBase(constValue) &
+              " (required: " & name & " " &
+              opDesc & " " & $distinctBase(constValue) &
               " - config: " & name & "=" & values[name] & ")")
         else:
           if not operator(value, constValue):
             raise (ref PresetFileError)(msg:
               "Cannot override config" &
-              " (required: " & name & opDesc & $constValue &
+              " (required: " & name & " " & opDesc & " " & $constValue &
               " - config: " & name & "=" & values[name] & ")")
         values.del name
       except ValueError:
@@ -900,7 +905,9 @@ proc readRuntimeConfig*(
       const name = astToStr(constValue)
       checkCompatibility(constValue, name, operator)
 
-  checkCompatibility SECONDS_PER_SLOT
+  checkCompatibility MIN_SECONDS_PER_SLOT .. MAX_SECONDS_PER_SLOT,
+                     "SECONDS_PER_SLOT", `in`
+  checkCompatibility SECONDS_PER_SLOT  # Temporary, until removed from presets
 
   checkCompatibility BLS_WITHDRAWAL_PREFIX
 

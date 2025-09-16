@@ -138,7 +138,7 @@ proc checkCompatible(
 
   let
     genesisFlag = (genesis != vc.beaconGenesis)
-    configFlag = not(checkConfig(info))
+    configFlag = not(checkConfig(info, vc.timeConfig))
 
   node.config = info
   node.genesis = Opt.some(genesis)
