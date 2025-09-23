@@ -2511,8 +2511,10 @@ proc lookupCgcFromPeer*(peer: Peer): uint64 =
 
   let metadata = peer.metadata
   if metadata.isOk:
-    return metadata.get.custody_group_count
-
+    return (if metadata.get.custody_group_count > NUMBER_OF_COLUMNS:
+              0'u64
+            else:
+              metadata.get.custody_group_count)
   # Try getting the custody count from ENR if metadata fetch fails.
   debug "Could not get cgc from metadata, trying from ENR",
         peer_id = peer.peerId
@@ -2523,6 +2525,8 @@ proc lookupCgcFromPeer*(peer: Peer): uint64 =
     if enrFieldOpt.isOk:
       try:
         let cgc = SSZ.decode(enrFieldOpt.get, uint8)
+        if cgc > NUMBER_OF_COLUMNS:
+          return 0'u64
         return cgc.uint64
       except SszError, SerializationError:
         discard  # Ignore decoding errors and fallback to default
