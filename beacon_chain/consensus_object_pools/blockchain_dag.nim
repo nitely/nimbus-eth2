@@ -909,7 +909,7 @@ proc updateBeaconMetrics(
         debugGloasComment "handle correctly for gloas"
         forkyState.data.latest_execution_payload_header.block_number.toGaugeValue
       else:
-        0.toGaugeValue
+        0'u64.toGaugeValue
     )
 
 import blockchain_dag_light_client
