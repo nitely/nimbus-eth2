@@ -29,7 +29,6 @@ const
 
   nimbusAgentStr* = "Nimbus/" & fullVersionStr
 
-echo defined(nimscript)
 when not defined(nimscript):
   import metrics
   declareGauge versionGauge, "Nimbus version info (as metric labels)", ["version", "commit"], name = "version"
