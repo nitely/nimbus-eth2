@@ -10,7 +10,7 @@
 ## This module implements the version tagging details of all binaries included
 ## in the Nimbus release process (i.e. beacon_node, validator_client, etc)
 
-import std/[os, strutils], metrics, ./buildinfo
+import std/[os, strutils], ./buildinfo
 
 const
   versionMajor* = 25
@@ -29,5 +29,8 @@ const
 
   nimbusAgentStr* = "Nimbus/" & fullVersionStr
 
-declareGauge versionGauge, "Nimbus version info (as metric labels)", ["version", "commit"], name = "version"
-versionGauge.set(1, labelValues=[fullVersionStr, gitRevision])
+echo defined(nimscript)
+when not defined(nimscript):
+  import metrics
+  declareGauge versionGauge, "Nimbus version info (as metric labels)", ["version", "commit"], name = "version"
+  versionGauge.set(1, labelValues=[fullVersionStr, gitRevision])
