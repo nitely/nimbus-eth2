@@ -25,9 +25,7 @@ proc gitFolderExists(path: string): bool {.compileTime.} =
   false
 
 const
-  compileYear = CompileDate[0 ..< 4] # YYYY-MM-DD (UTC)
-  copyrights* =
-    "Copyright (c) 2019-" & compileYear & " Status Research & Development GmbH"
+  compileYear* = CompileDate[0 ..< 4] # YYYY-MM-DD (UTC)
 
   GitRevisionOverride {.strdefine.} = ""
 
@@ -40,8 +38,7 @@ template generateGitRevision*(repoPath: string): untyped =
   when GitRevisionOverride.len > 0:
     static:
       doAssert(
-        GitRevisionOverride.len == 8,
-        "GitRevisionOverride must consist of 8 characters",
+        GitRevisionOverride.len == 8, "GitRevisionOverride must consist of 8 characters"
       )
       doAssert(
         GitRevisionOverride.allIt(it in HexDigits),
@@ -53,9 +50,7 @@ template generateGitRevision*(repoPath: string): untyped =
     if gitFolderExists(repoPath):
       # only using git if the parent dir is a git repo.
       strip(
-        staticExec(
-          "git -C " & strutils.escape(repoPath) & " rev-parse --short=8 HEAD"
-        )
+        staticExec("git -C " & strutils.escape(repoPath) & " rev-parse --short=8 HEAD")
       )
     else:
       # otherwise we use revision number given by build system.
@@ -81,5 +76,6 @@ func nimBanner*(): string =
 
 when not defined(nimscript):
   import metrics
-  declareGauge nimVersionGauge, "Nim version info", ["version", "nim_commit"], name = "nim_version"
-  nimVersionGauge.set(1, labelValues=[NimVersion, getNimGitHash()])
+  declareGauge nimVersionGauge,
+    "Nim version info", ["version", "nim_commit"], name = "nim_version"
+  nimVersionGauge.set(1, labelValues = [NimVersion, getNimGitHash()])
