@@ -1,3 +1,13 @@
+2025-09-26 v25.9.2
+==================
+
+Nimbus `v25.9.2` is a `medium-urgency` stability-oriented release for mainnet and `high-urgency` release for the Hoodi, Sepolia, and Holesky testnets, due to impending Fusaka forks on each.
+
+### Fixes
+
+- Fix crash when block without blobs is unqueued from quarantine:
+  https://github.com/status-im/nimbus-eth2/pull/7543
+
 2025-09-25 v25.9.1
 ==================
 
