@@ -48,16 +48,29 @@ func is_compounding_withdrawal_credential*(
     withdrawal_credentials: Eth2Digest): bool =
   withdrawal_credentials.data[0] == COMPOUNDING_WITHDRAWAL_PREFIX
 
-# https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.0/specs/electra/beacon-chain.md#new-has_compounding_withdrawal_credential
-func has_compounding_withdrawal_credential*(validator: Validator): bool =
-  ## Check if ``validator`` has an 0x02 prefixed "compounding" withdrawal
-  ## credential.
-  is_compounding_withdrawal_credential(validator.withdrawal_credentials)
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/gloas/beacon-chain.md#new-is_builder_withdrawal_credential
+func is_builder_withdrawal_credential*(
+    withdrawal_credentials: Eth2Digest): bool =
+  withdrawal_credentials.data[0] == BUILDER_WITHDRAWAL_PREFIX
 
-# https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.2/specs/electra/beacon-chain.md#new-get_max_effective_balance
-func get_max_effective_balance*(validator: Validator): Gwei =
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/electra/beacon-chain.md#new-has_compounding_withdrawal_credential
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/gloas/beacon-chain.md#modified-has_compounding_withdrawal_credential
+func has_compounding_withdrawal_credential*(
+    consensusFork: static ConsensusFork, validator: Validator): bool =
+  when consensusFork >= ConsensusFork.Gloas:
+    ## Check if ``validator`` has an 0x02 or 0x03 prefixed withdrawal credential.
+    is_compounding_withdrawal_credential(validator.withdrawal_credentials) or
+        is_builder_withdrawal_credential(validator.withdrawal_credentials)
+  else:
+    ## Check if ``validator`` has an 0x02 prefixed "compounding" withdrawal
+    ## credential.
+    is_compounding_withdrawal_credential(validator.withdrawal_credentials)
+
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/electra/beacon-chain.md#new-get_max_effective_balance
+func get_max_effective_balance*(
+    consensusFork: static ConsensusFork, validator: Validator): Gwei =
   ## Get max effective balance for ``validator``.
-  if has_compounding_withdrawal_credential(validator):
+  if has_compounding_withdrawal_credential(consensusFork, validator):
     MAX_EFFECTIVE_BALANCE_ELECTRA.Gwei
   else:
     MIN_ACTIVATION_BALANCE.Gwei
@@ -84,9 +97,9 @@ func get_validator_from_deposit*(
     effective_balance: effective_balance
   )
 
-# https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.0/specs/electra/beacon-chain.md#deposits
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/electra/beacon-chain.md#modified-get_validator_from_deposit
 func get_validator_from_deposit*(
-    _: electra.BeaconState | fulu.BeaconState | gloas.BeaconState,
+    state: electra.BeaconState | fulu.BeaconState | gloas.BeaconState,
     pubkey: ValidatorPubKey,
     withdrawal_credentials: Eth2Digest, amount: Gwei): Validator =
   var validator = Validator(
@@ -100,7 +113,7 @@ func get_validator_from_deposit*(
   )
 
   # [Modified in Electra:EIP7251]
-  let max_effective_balance = get_max_effective_balance(validator)
+  let max_effective_balance = get_max_effective_balance(type(state).kind, validator)
   validator.effective_balance = min(
     amount - amount mod static(Gwei(EFFECTIVE_BALANCE_INCREMENT)),
     max_effective_balance)
@@ -1459,10 +1472,11 @@ func has_eth1_withdrawal_credential*(validator: Validator): bool =
   ## Check if ``validator`` has an 0x01 prefixed "eth1" withdrawal credential.
   validator.withdrawal_credentials.data[0] == ETH1_ADDRESS_WITHDRAWAL_PREFIX
 
-# https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.0/specs/electra/beacon-chain.md#new-has_execution_withdrawal_credential
-func has_execution_withdrawal_credential*(validator: Validator): bool =
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/electra/beacon-chain.md#new-has_execution_withdrawal_credential
+func has_execution_withdrawal_credential*(
+    consensusFork: static ConsensusFork, validator: Validator): bool =
   ## Check if ``validator`` has a 0x01 or 0x02 prefixed withdrawal credential.
-  has_compounding_withdrawal_credential(validator) or
+  has_compounding_withdrawal_credential(consensusFork, validator) or
     has_eth1_withdrawal_credential(validator)
 
 # https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.6/specs/gloas/beacon-chain.md#new-has_builder_withdrawal_credential
@@ -1478,7 +1492,7 @@ func is_fully_withdrawable_validator(
   ## Check if ``validator`` is fully withdrawable.
   when fork >= ConsensusFork.Electra:
     # [Modified in Electra:EIP7251]
-    has_execution_withdrawal_credential(validator) and
+    has_execution_withdrawal_credential(fork, validator) and
       validator.withdrawable_epoch <= epoch and balance > 0.Gwei
   else:
     has_eth1_withdrawal_credential(validator) and
@@ -1492,12 +1506,12 @@ func is_partially_withdrawable_validator(
   when fork >= ConsensusFork.Electra:
     # [Modified in Electra:EIP7251]
     let
-      max_effective_balance = get_max_effective_balance(validator)
+      max_effective_balance = get_max_effective_balance(fork, validator)
       has_max_effective_balance =
         validator.effective_balance == max_effective_balance
       has_excess_balance =
         balance > max_effective_balance  # [Modified in Electra:EIP7251]
-    has_execution_withdrawal_credential(validator) and
+    has_execution_withdrawal_credential(fork, validator) and
       has_max_effective_balance and has_excess_balance
   else:
     let
@@ -1533,7 +1547,8 @@ func switch_to_compounding_validator*(
   validator.withdrawal_credentials.data[0] = COMPOUNDING_WITHDRAWAL_PREFIX
   queue_excess_active_balance(state, index.uint64)
 
-# https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.0/specs/electra/beacon-chain.md#new-get_pending_balance_to_withdraw
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/electra/beacon-chain.md#new-get_pending_balance_to_withdraw
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/gloas/beacon-chain.md#modified-get_pending_balance_to_withdraw
 func get_pending_balance_to_withdraw*(
     state: electra.BeaconState | fulu.BeaconState | gloas.BeaconState,
     validator_index: ValidatorIndex): Gwei =
@@ -1541,6 +1556,14 @@ func get_pending_balance_to_withdraw*(
   for withdrawal in state.pending_partial_withdrawals:
     if withdrawal.validator_index == validator_index:
       pending_balance += withdrawal.amount
+
+  when type(state).kind >= ConsensusFork.Gloas:
+    for withdrawal in state.builder_pending_withdrawals:
+      if withdrawal.builder_index == validator_index:
+        pending_balance += withdrawal.amount
+    for payment in state.builder_pending_payments:
+      if payment.withdrawal.builder_index == validator_index:
+        pending_balance += payment.withdrawal.amount
 
   pending_balance
 
@@ -1566,7 +1589,7 @@ template get_effective_balance_update*(
       MAX_EFFECTIVE_BALANCE.Gwei)
   else:
     let effective_balance_limit =
-      if has_compounding_withdrawal_credential(state.validators.item(vidx)):
+      if has_compounding_withdrawal_credential(consensusFork, state.validators.item(vidx)):
         MAX_EFFECTIVE_BALANCE_ELECTRA.Gwei
       else:
         MIN_ACTIVATION_BALANCE.Gwei
@@ -1716,7 +1739,7 @@ template get_expected_withdrawals_with_partial_count_aux*(
         index: withdrawal_index,
         validator_index: validator_index,
         # [Modified in Electra:EIP7251]
-        amount: balance - get_max_effective_balance(validator))
+        amount: balance - get_max_effective_balance(type(state).kind, validator))
       w.address.data[0..19] = validator.withdrawal_credentials.data[12..^1]
       withdrawals.add w
       withdrawal_index = WithdrawalIndex(withdrawal_index + 1)
@@ -1858,7 +1881,7 @@ template get_expected_withdrawals_with_builder_count_aux(
       var w = Withdrawal(
         index: withdrawal_index,
         validator_index: validator_index,
-        amount: balance - get_max_effective_balance(validator))
+        amount: balance - get_max_effective_balance(type(state).kind, validator))
       w.address.data[0..19] = validator.withdrawal_credentials.data[12..^1]
       withdrawals.add w
       withdrawal_index = WithdrawalIndex(withdrawal_index + 1)
@@ -2550,7 +2573,7 @@ func upgrade_to_electra*(
   # Ensure early adopters of compounding credentials go through the activation
   # churn
   for index, validator in post.validators:
-    if has_compounding_withdrawal_credential(validator):
+    if has_compounding_withdrawal_credential(type(post[]).kind, validator):
       queue_excess_active_balance(post[], index.uint64)
 
   post
