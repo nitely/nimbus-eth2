@@ -423,8 +423,9 @@ proc checkForPotentialDoppelganger(
 proc processAttestation*(
     self: ref Eth2Processor, src: MsgSource,
     attestation: phase0.Attestation | SingleAttestation,
-    subnet_id: SubnetId, checkSignature, checkValidator: bool
-): Future[ValidationRes] {.async: (raises: [CancelledError]).} =
+    subnet_id: SubnetId, checkSignature, checkValidator: bool,
+    fork: ConsensusFork):
+    Future[ValidationRes] {.async: (raises: [CancelledError]).} =
   var wallTime = self.getCurrentBeaconTime()
   let (afterGenesis, wallSlot) = wallTime.toSlot()
 
@@ -441,9 +442,15 @@ proc processAttestation*(
   let delay = wallTime - attestation.data.slot.attestation_deadline
   debug "Attestation received", delay
 
-  # Now proceed to validation
-  let v = await self.attestationPool.validateAttestation(
-    self.batchCrypto, attestation, wallTime, subnet_id, checkSignature)
+  let v = when attestation is phase0.Attestation:
+    await self.attestationPool.validateAttestation(
+      self.batchCrypto, attestation, wallTime, subnet_id, checkSignature)
+  else:
+    withConsensusFork(fork):
+      await self.attestationPool.validateAttestation(
+        self.batchCrypto, attestation, wallTime, subnet_id, checkSignature,
+        consensusFork)
+
   return if v.isOk():
     # Due to async validation the wallTime here might have changed
     wallTime = self.getCurrentBeaconTime()
@@ -481,7 +488,8 @@ proc processSignedAggregateAndProof*(
     self: ref Eth2Processor, src: MsgSource,
     signedAggregateAndProof:
       phase0.SignedAggregateAndProof | electra.SignedAggregateAndProof,
-    checkSignature = true, checkCover = true): Future[ValidationRes]
+    checkSignature = true, checkCover = true,
+    fork: ConsensusFork): Future[ValidationRes]
     {.async: (raises: [CancelledError]).} =
   var wallTime = self.getCurrentBeaconTime()
   let (afterGenesis, wallSlot) = wallTime.toSlot()
@@ -503,10 +511,9 @@ proc processSignedAggregateAndProof*(
     delay = wallTime - slot.aggregate_deadline
   debug "Aggregate received", delay
 
-  let v =
-    await self.attestationPool.validateAggregate(
-      self.batchCrypto, signedAggregateAndProof, wallTime,
-      checkSignature = checkSignature, checkCover = checkCover)
+  let v = await self.attestationPool.validateAggregate(
+    self.batchCrypto, signedAggregateAndProof, wallTime,
+    checkSignature = checkSignature, checkCover = checkCover, fork)
 
   return if v.isOk():
     # Due to async validation the wallTime here might have changed

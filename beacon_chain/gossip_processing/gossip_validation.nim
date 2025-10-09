@@ -1089,7 +1089,8 @@ proc validateAttestation*(
     batchCrypto: ref BatchCrypto,
     attestation: SingleAttestation,
     wallTime: BeaconTime,
-    subnet_id: SubnetId, checkSignature: bool):
+    subnet_id: SubnetId, checkSignature: bool,
+    consensusFork: ConsensusFork):
     Future[Result[
       tuple[attesting_index: ValidatorIndex, beacon_committee_len: int,
             index_in_committee: int, sig: CookedSig],
@@ -1117,15 +1118,14 @@ proc validateAttestation*(
   # https://github.com/ethereum/consensus-specs/blob/v1.4.0-beta.2/specs/deneb/p2p-interface.md#beacon_attestation_subnet_id
   # modifies this for Deneb and newer forks.
   block:
-    let v = check_propagation_slot_range(
-      pool.dag.cfg.consensusForkAtEpoch(wallTime.slotOrZero.epoch), slot,
-      wallTime)
+    let v = check_propagation_slot_range(consensusFork, slot, wallTime)
     if v.isErr():  # [IGNORE]
       return err(v.error())
 
   # [REJECT] attestation.data.index == 0
-  if not (attestation.data.index == 0):
-    return pool.checkedReject("SingleAttestation: attestation.data.index != 0")
+  if consensusFork < ConsensusFork.Gloas:
+    if not (attestation.data.index == 0):
+      return pool.checkedReject("SingleAttestation: attestation.data.index != 0")
 
   # The block being voted for (attestation.data.beacon_block_root) has been seen
   # (via both gossip and non-gossip sources) (a client MAY queue attestations
@@ -1138,6 +1138,18 @@ proc validateAttestation*(
     if v.isErr():  # [IGNORE/REJECT]
       return pool.checkedResult(v.error)
     v.get()
+
+  # https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/gloas/p2p-interface.md#beacon_attestation_subnet_id
+  if consensusFork >= ConsensusFork.Gloas:
+    # [REJECT] attestation.data.index < 2
+    if not (attestation.data.index < 2):
+      return pool.checkedReject("SingleAttestation: index must be < 2 in Gloas")
+
+    # [REJECT] attestation.data.index == 0 if block.slot == attestation.data.slot
+    if target.blck.bid.slot == attestation.data.slot:
+      if not (attestation.data.index == 0):
+        return pool.checkedReject(
+          "SingleAttestation: same-slot attestation must have index 0")
 
   if attestation.attester_index > high(ValidatorIndex).uint64:
     return errReject("SingleAttestation: attester index too high")
@@ -1248,11 +1260,13 @@ proc validateAttestation*(
 # https://github.com/ethereum/consensus-specs/blob/v1.4.0-beta.1/specs/phase0/p2p-interface.md#beacon_aggregate_and_proof
 # https://github.com/ethereum/consensus-specs/blob/v1.4.0-beta.5/specs/deneb/p2p-interface.md#beacon_aggregate_and_proof
 # https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.4/specs/electra/p2p-interface.md#beacon_aggregate_and_proof
+# https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/gloas/p2p-interface.md#beacon_aggregate_and_proof
 proc validateAggregate*(
     pool: ref AttestationPool, batchCrypto: ref BatchCrypto,
     signedAggregateAndProof:
       phase0.SignedAggregateAndProof | electra.SignedAggregateAndProof,
-    wallTime: BeaconTime, checkSignature = true, checkCover = true):
+    wallTime: BeaconTime, checkSignature = true, checkCover = true,
+    consensusFork: ConsensusFork):
     Future[Result[
       tuple[attestingIndices: seq[ValidatorIndex], sig: CookedSig],
       ValidationError]] {.async: (raises: [CancelledError]).} =
@@ -1285,9 +1299,7 @@ proc validateAggregate*(
   # https://github.com/ethereum/consensus-specs/blob/v1.4.0-beta.2/specs/deneb/p2p-interface.md#beacon_aggregate_and_proof
   # modifies this for Deneb and newer forks.
   block:
-    let v = check_propagation_slot_range(
-      pool.dag.cfg.consensusForkAtEpoch(wallTime.slotOrZero.epoch), slot,
-      wallTime)
+    let v = check_propagation_slot_range(consensusFork, slot, wallTime)
     if v.isErr():  # [IGNORE]
       return err(v.error())
 
@@ -1329,6 +1341,18 @@ proc validateAggregate*(
     if v.isErr():  # [IGNORE/REJECT]
       return pool.checkedResult(v.error)
     v.get()
+
+  when signedAggregateAndProof is electra.SignedAggregateAndProof:
+    if consensusFork >= ConsensusFork.Gloas:
+      # [REJECT] aggregate.data.index < 2
+      if not (aggregate.data.index < 2):
+        return pool.checkedReject("Aggregate: index must be < 2 in Gloas")
+
+      # [REJECT] aggregate.data.index == 0 if block.slot == aggregate.data.slot
+      if target.blck.bid.slot == aggregate.data.slot:
+        if not (aggregate.data.index == 0):
+          return pool.checkedReject(
+            "Aggregate: same-slot aggregate must have index 0")
 
   let
     shufflingRef =
