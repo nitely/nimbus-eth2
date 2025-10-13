@@ -335,7 +335,7 @@ proc processBlobSidecar*(
 
 proc processDataColumnSidecar*(
     self: var Eth2Processor, src: MsgSource,
-    dataColumnSidecar: fulu.DataColumnSidecar | gloas.DataColumnSidecar,
+    dataColumnSidecar: fulu.DataColumnSidecar,
     subnet_id: uint64): ValidationRes =
   template block_header: untyped = dataColumnSidecar.signed_block_header.message
   let
@@ -375,6 +375,38 @@ proc processDataColumnSidecar*(
   data_column_sidecars_received.inc()
   data_column_sidecar_delay.observe(delay.toFloatSeconds())
 
+  v
+
+proc processDataColumnSidecar*(
+    self: var Eth2Processor, src: MsgSource,
+    dataColumnSidecar: gloas.DataColumnSidecar,
+    subnet_id: uint64): ValidationRes =
+  let
+    block_root = dataColumnSidecar.beacon_block_root
+    wallTime = self.getCurrentBeaconTime()
+    (_, wallSlot) = wallTime.toSlot()
+
+  logScope:
+    dcs = shortLog(dataColumnSidecar)
+    wallSlot
+
+  debug "Data column received (Gloas - quarantine not implemented)"
+
+  let v = self.dag.validateDataColumnSidecar(
+    self.quarantine, self.dataColumnQuarantine,
+    dataColumnSidecar, wallTime, subnet_id)
+
+  if v.isErr():
+    debug "Dropping data column", error = v.error()
+    data_column_sidecars_dropped.inc(1, [$v.error[0]])
+    return v
+
+  debugGloasComment ""
+  # TODO: Implement quarantine logic for Gloas
+  # For now, just validate and drop
+  debug "Data column validated (not stored - quarantine TODO)"
+
+  data_column_sidecars_received.inc()
   v
 
 proc setupDoppelgangerDetection*(self: var Eth2Processor, slot: Slot) =
@@ -446,10 +478,8 @@ proc processAttestation*(
     await self.attestationPool.validateAttestation(
       self.batchCrypto, attestation, wallTime, subnet_id, checkSignature)
   else:
-    withConsensusFork(fork):
-      await self.attestationPool.validateAttestation(
-        self.batchCrypto, attestation, wallTime, subnet_id, checkSignature,
-        consensusFork)
+    await self.attestationPool.validateAttestation(
+      self.batchCrypto, attestation, wallTime, subnet_id, checkSignature, fork)
 
   return if v.isOk():
     # Due to async validation the wallTime here might have changed

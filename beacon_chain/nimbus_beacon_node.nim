@@ -2426,8 +2426,18 @@ proc installMessageValidators(node: BeaconNode) =
         # https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.3/specs/fulu/p2p-interface.md#data_column_sidecar_subnet_id
         # https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/gloas/p2p-interface.md#data_column_sidecar_subnet_id
         when consensusFork >= ConsensusFork.Gloas:
-          debugGloasComment " "
-        elif consensusFork >= ConsensusFork.Fulu:
+          for it in 0'u64..<node.dag.cfg.NUMBER_OF_CUSTODY_GROUPS:
+            closureScope:
+              let subnet_id = it
+              node.network.addValidator(
+                getDataColumnSidecarTopic(digest, subnet_id), proc (
+                  dataColumnSidecar: gloas.DataColumnSidecar,
+                  src: PeerId
+                ): ValidationResult =
+                  toValidationResult(
+                    node.processor[].processDataColumnSidecar(
+                      MsgSource.gossip, dataColumnSidecar, subnet_id)))
+        elif consensusFork == ConsensusFork.Fulu:
           for it in 0'u64..<node.dag.cfg.NUMBER_OF_CUSTODY_GROUPS:
             closureScope:
               let subnet_id = it

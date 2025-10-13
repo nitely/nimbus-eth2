@@ -357,6 +357,16 @@ template hasSidecarImpl(
     return false
   true
 
+template hasSidecarImpl(
+    blockRoot: Eth2Digest,
+    sidecarIndex: typed
+): bool =
+  let rootRecord = quarantine.roots.getOrDefault(blockRoot)
+  if rootRecord.count == 0:
+    return false
+  let index = quarantine.getIndex(sidecarIndex)
+  (index != -1) and not rootRecord.sidecars[index].isEmpty()
+
 func hasSidecar*(
     quarantine: BlobQuarantine,
     blockRoot: Eth2Digest,
@@ -378,6 +388,13 @@ func hasSidecar*(
   ## Function returns ``true``if quarantine has column corresponding to specific
   ## ``index``, ``slot`` and ``proposer_index``.
   hasSidecarImpl(blockRoot, slot, proposer_index, index)
+
+func hasSidecar*(
+    quarantine: ColumnQuarantine,
+    blockRoot: Eth2Digest,
+    index: ColumnIndex
+): bool =
+  hasSidecarImpl(blockRoot, index)
 
 func hasSidecars*(
     quarantine: BlobQuarantine,
