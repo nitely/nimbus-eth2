@@ -176,7 +176,7 @@ if canEnableDebuggingSymbols:
   # add debugging symbols and original files and line numbers
   --debugger:native
 
---define:nimOldCaseObjects # https://github.com/status-im/nim-confutils/issues/9
+#--define:nimOldCaseObjects # https://github.com/status-im/nim-confutils/issues/9
 
 switch("warningAsError", "BareExcept:on")
 switch("warningAsError", "CStringConv:on")
