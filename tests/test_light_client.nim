@@ -79,7 +79,7 @@ suite "Light client" & preset():
     let
       validatorMonitor = newClone(ValidatorMonitor.init())
       dag = ChainDAGRef.init(
-        cfg, makeTestDB(num_validators, cfg = cfg), validatorMonitor, {},
+        cfg, cfg.makeTestDB(num_validators), validatorMonitor, {},
         lcDataConfig = LightClientDataConfig(
           serve: true,
           importMode: LightClientDataImportMode.OnlyNew))
@@ -233,7 +233,7 @@ suite "Light client" & preset():
     dag.advanceToSlot(finalizedSlot, verifier, quarantine[])
 
     # Initialize new DAG from checkpoint
-    let cpDb = BeaconChainDB.new("", cfg = cfg, inMemory = true)
+    let cpDb = BeaconChainDB.new("", cfg, inMemory = true)
     ChainDAGRef.preInit(cpDb, genesisState[])
     ChainDAGRef.preInit(cpDb, dag.headState) # dag.getForkedBlock(dag.head.bid).get)
     let cpDag = ChainDAGRef.init(
