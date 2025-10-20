@@ -103,7 +103,9 @@ type
       ## time
 
   NoSidecars* = typeof(())
-  SomeOptSidecars = NoSidecars | Opt[BlobSidecars] | Opt[DataColumnSidecars]
+  SomeOptSidecars =
+    NoSidecars | Opt[BlobSidecars] | Opt[fulu.DataColumnSidecars] |
+    Opt[gloas.DataColumnSidecars]
 
 const noSidecars* = default(NoSidecars)
 
@@ -225,7 +227,10 @@ proc storeSidecars(self: BlockProcessor, sidecarsOpt: Opt[BlobSidecars]) =
     for b in sidecarsOpt[]:
       self.consensusManager.dag.db.putBlobSidecar(b[])
 
-proc storeSidecars(self: BlockProcessor, sidecarsOpt: Opt[DataColumnSidecars]) =
+proc storeSidecars(
+    self: BlockProcessor,
+    sidecarsOpt: Opt[fulu.DataColumnSidecars] | Opt[gloas.DataColumnSidecars]
+) =
   if sidecarsOpt.isSome():
     for c in sidecarsOpt[]:
       self.consensusManager.dag.db.putDataColumnSidecar(c[])
@@ -394,11 +399,12 @@ proc enqueueQuarantine(self: ref BlockProcessor, root: Eth2Digest) =
     withBlck(quarantined):
       when consensusFork == ConsensusFork.Gloas:
         debugGloasComment ""
-        self.enqueueBlock(MsgSource.gossip, forkyBlck, Opt.none(DataColumnSidecars))
+        self.enqueueBlock(
+          MsgSource.gossip, forkyBlck, Opt.none(gloas.DataColumnSidecars))
       elif consensusFork == ConsensusFork.Fulu:
         if len(forkyBlck.message.body.blob_kzg_commitments) == 0:
           self.enqueueBlock(
-            MsgSource.gossip, forkyBlck, Opt.some(DataColumnSidecars @[])
+            MsgSource.gossip, forkyBlck, Opt.some(fulu.DataColumnSidecars @[])
           )
         else:
           if (let res = checkBlobOrColumnlessSignature(self[], forkyBlck); res.isErr):
@@ -812,9 +818,12 @@ proc addBlock*(
         when sidecarsOpt is Opt[BlobSidecars]:
           if sidecarsOpt.isSome:
             self.blobQuarantine[].put(blockRoot, sidecarsOpt.get)
-        elif sidecarsOpt is Opt[DataColumnSidecars]:
+        elif sidecarsOpt is Opt[fulu.DataColumnSidecars]:
           if sidecarsOpt.isSome:
             self.dataColumnQuarantine[].put(blockRoot, sidecarsOpt.get)
+        elif sidecarsOpt is Opt[gloas.DataColumnSidecars]:
+          if sidecarsOpt.isSome:
+            debugGloasComment ""
         elif sidecarsOpt is NoSidecars:
           discard
         else:
