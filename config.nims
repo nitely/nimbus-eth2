@@ -181,6 +181,7 @@ if canEnableDebuggingSymbols:
 switch("warningAsError", "BareExcept:on")
 switch("warningAsError", "CStringConv:on")
 switch("warningAsError", "UnusedImport:on")
+switch("warningAsError", "CaseTransition:on")
 switch("hintAsError", "ConvFromXtoItselfNotNeeded:on")
 switch("hintAsError", "DuplicateModuleImport:on")
 
