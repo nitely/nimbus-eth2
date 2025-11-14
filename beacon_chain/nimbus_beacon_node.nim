@@ -2828,6 +2828,10 @@ proc doRunBeaconNode(
     kzg.loadTrustedSetup(config.trustedSetupFile.get(), 0).isOkOr:
       fatal "Cannot load KZG trusted setup from file", msg = error
       quit(QuitFailure)
+  else:
+    kzg.loadTrustedSetupFromString(kzg.trustedSetup, 0).isOkOr:
+      fatal "Cannot load KZG trusted setup using default data", msg = error
+      quit(QuitFailure)
 
   if ProcessState.stopIt(notice("Shutting down", reason = it)):
     return
