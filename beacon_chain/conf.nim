@@ -692,7 +692,7 @@ type
         defaultValueDesc: "Baked in trusted setup"
         name: "debug-trusted-setup-file" .}: Option[string]
 
-      bnOpts* {.flatten.} = BeaconNodeOptsConf
+      bnOpts* {.flatten.}: BeaconNodeOptsConf
 
     of BNStartUpCmd.wallets:
       case walletsCmd* {.command.}: WalletsCmd
