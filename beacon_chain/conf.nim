@@ -123,7 +123,7 @@ type
     Light = "light",
     Lenient = "lenient"
 
-  BeacsonNodeOptsConf* = object
+  BeaconNodeOptsConf* = object
     runAsServiceFlag* {.
       windowsOnly
       defaultValue: false,
