@@ -203,10 +203,14 @@ func getMissingColumnsLog(
   for blck in blocks:
     withBlck(blck[]):
       when consensusFork == ConsensusFork.Fulu:
-        let map =
-          overseer.columnQuarantine[].getMissingColumnsMap(
-            forkyBlck.root, forkyBlck)
-        res.add($map)
+        res.add(
+          if len(forkyBlck.message.body.blob_kzg_commitments) == 0:
+            shortLog(forkyBlck.root) & ":[]"
+          else:
+            let map =
+              overseer.columnQuarantine[].getMissingColumnsMap(forkyBlck.root)
+            shortLog(forkyBlck.root) & ":" & $map
+        )
       else:
         raiseAssert "Unsupported fork"
   "[ " & res.join(",") & " ]"
@@ -350,8 +354,10 @@ func getMissingIndicesLog(
       indexLog(indices)
     elif consensusFork == ConsensusFork.Fulu:
       let indices =
-        overseer.columnQuarantine[].getMissingSidecarIndices(
-          forkyBlck.root, forkyBlck)
+        if len(forkyBlck.message.body.blob_kzg_commitments) == 0:
+          default(seq[ColumnIndex])
+        else:
+          overseer.columnQuarantine[].getMissingSidecarIndices(forkyBlck.root)
       indexLog(indices)
     else:
       raiseAssert "Unsupported fork"
@@ -1864,8 +1870,11 @@ proc doRangeSidecarsStep(
                 missingMap =
                   withBlck(blck[]):
                     when consensusFork == ConsensusFork.Fulu:
-                      overseer.columnQuarantine[].getMissingColumnsMap(
-                        forkyBlck.root, forkyBlck)
+                      if len(forkyBlck.message.body.blob_kzg_commitments) == 0:
+                        ColumnMap()
+                      else:
+                        overseer.columnQuarantine[].getMissingColumnsMap(
+                          forkyBlck.root)
                     else:
                       raiseAssert "Should not happen!"
               if not(missingMap.empty()):
