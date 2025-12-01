@@ -47,17 +47,27 @@ func shortLog(optblkid: Opt[BlockId]): string =
   else:
     shortLog(optblkid.get())
 
+template cleanupList(a: untyped) =
+  for mitem in a.mitems():
+    mitem = nil
+  a.reset()
+
+template cleanupRecordsList(a: untyped) =
+  for mitem in a.mitems():
+    mitem.sidecar = nil
+  a.reset()
+
 func shortLog(digests: openArray[Eth2Digest]): string =
   "[" & digests.mapIt(shortLog(it)).join(",") & "]"
 
 func shortLog(blocks: openArray[ref ForkedSignedBeaconBlock]): string =
   "[" & blocks.mapIt(
-    "(slot: " & $it[].slot() & ", root: " & shortLog(it[].root) & ")").
+    "(slot:" & $it[].slot() & ",root: " & shortLog(it[].root) & ")").
     join(",") & "]"
 
 func shortLog(bids: openArray[BlockId]): string =
   "[" & bids.mapIt(
-    "(slot: " & $it.slot & ", root: " & shortLog(it.root) & ")").join(",") & "]"
+    "(slot:" & $it.slot & ",root:" & shortLog(it.root) & ")").join(",") & "]"
 
 func shortLog(blobs: Opt[seq[ref BlobSidecar]]): string =
   if blobs.isNone():
@@ -89,12 +99,10 @@ template blobsCount(blck: ForkedSignedBeaconBlock): int =
       0
 
 func slimLog(blck: ref ForkedSignedBeaconBlock): string =
-  "(fork: " & $blck.kind &
-    ",slot: " & $blck[].slot() &
-    ",root: " & shortLog(blck[].root()) &
-    ",parent_root: " & shortLog(blck[].parent_root()) &
-    ",blobs_count: " & $blck[].blobsCount() &
-    ")"
+  "(" & $blck.kind & ",slot:" & $blck[].slot() &
+    ",root:" & shortLog(blck[].root()) &
+    ",parent_root:" & shortLog(blck[].parent_root()) &
+    ",blobs_count:" & $blck[].blobsCount() & ")"
 
 func slimLog(blocks: openArray[ref ForkedSignedBeaconBlock]): string =
   "[" & blocks.mapIt(slimLog(it)).join(",") & "]"
@@ -1359,6 +1367,10 @@ proc doPeerUpdateRootsSidecars(
 
     debug "Requesting blob sidecars by root from peer"
 
+    defer:
+      # Preemptively cleanup blocks range on exit
+      cleanupList(emptyBlobBlocks)
+
     let
       blobSidecars =
         (await blobSidecarsByRoot(peer, BlobIdentifierList blobRoots,
@@ -1370,7 +1382,7 @@ proc doPeerUpdateRootsSidecars(
     debug "Received blob sidecars by root on request",
       blobs = slimLog(blobSidecars.asSeq()), blobs_count = len(blobSidecars)
 
-    let
+    var
       records =
         groupSidecars(blobRoots, blobSidecars.asSeq()).valueOr:
           debug "Response to blobs by root is incorrect",
@@ -1381,6 +1393,10 @@ proc doPeerUpdateRootsSidecars(
 
     for record in records:
       overseer.blobQuarantine[].put(record.block_root, record.sidecar)
+
+    defer:
+      # Preemptively cleanup sidecar records list on exit
+      cleanupRecordsList(records)
 
     if len(records) < len(blobRoots):
       if len(blobRoots) == 1:
@@ -1450,6 +1466,10 @@ proc doPeerUpdateRootsSidecars(
 
     debug "Requesting data column sidecars by root from peer"
 
+    defer:
+      # Preemptively cleanup blocks range on exit
+      cleanupList(emptyColumnBlocks)
+
     let
       consensusFork = ConsensusFork.Fulu
         # This `consensusFork` is only used for request sidecars amount
@@ -1465,7 +1485,7 @@ proc doPeerUpdateRootsSidecars(
       columns = slimLog(columnSidecars.asSeq()),
       columns_count = len(columnSidecars)
 
-    let
+    var
       records =
         groupSidecars(
           columnRoots, columnsCount, columnSidecars.asSeq()).valueOr:
@@ -1474,6 +1494,10 @@ proc doPeerUpdateRootsSidecars(
               columns_count = len(columnSidecars), reason = error
             peer.updateScore(PeerScoreBadResponse)
             return false
+
+    defer:
+      # Preemptively cleanup sidecar records list on exit
+      cleanupRecordsList(records)
 
     for record in records:
       overseer.columnQuarantine[].put(record.block_root, record.sidecar)
@@ -1767,7 +1791,7 @@ proc doRangeSidecarsStep(
         debug "Received blob sidecars range from peer",
           blobs_map = getShortMap(request, data.toSeq())
 
-        let
+        var
           grouped = groupSidecars(request.data, data.asSeq()).valueOr:
             peer.updateScore(PeerScoreBadResponse)
             debug "Received invalid blob sidecars range",
@@ -1777,7 +1801,13 @@ proc doRangeSidecarsStep(
             return false
           blocks = overseer.sbuffer(direction).peekRange(request.data)
 
+        defer:
+          # Preemptively cleanup blocks range sidecar records list on exit
+          cleanupList(blocks)
+          cleanupRecordsList(grouped)
+
           # Early detection of empty response.
+        let
           sindex = validateBlocks(blocks, grouped).valueOr:
             peer.updateScore(PeerScoreMissingValues)
             debug "Received non-complete blob sidecars range",
@@ -1844,11 +1874,17 @@ proc doRangeSidecarsStep(
 
     of ConsensusFork.Fulu:
       try:
-        let
+        var
           blocks = overseer.sbuffer(direction).peekRange(request.data)
+
+        let
           custodyMap = overseer.columnQuarantine[].custodyMap
           peerMap = overseer.getPeerColumnMap(peerEntry)
           intersectMap = custodyMap and peerMap
+
+        defer:
+          # Preemptively cleanup blocks range on exit
+          cleanupList(blocks)
 
         # Here we perform check if remote peer has compatible columns or not.
         if len(intersectMap) == 0:
@@ -1931,7 +1967,7 @@ proc doRangeSidecarsStep(
             columns = slimLog(data.asSeq()),
             missing_log = missingLog
 
-          let
+          var
             grouped =
               groupSidecars(request.data, intersectMap, data.asSeq()).valueOr:
                 peer.updateScore(PeerScoreBadResponse)
@@ -1941,7 +1977,12 @@ proc doRangeSidecarsStep(
                 overseer.ssqueue(direction).push(request)
                 return false
 
-            # Early detection of empty response.
+          defer:
+            # Preemptively cleanup sidecar records list on exit
+            cleanupRecordsList(grouped)
+
+          # Early detection of empty response.
+          let
             sindex = validateBlocks(blocks, grouped, intersectMap).valueOr:
               peer.updateScore(PeerScoreMissingValues)
               debug "Received non-complete data column sidecars range",
@@ -1955,7 +1996,7 @@ proc doRangeSidecarsStep(
             debug "Received columns range which do not have corresponding " &
                   "blocks range"
             overseer.ssqueue(direction).push(request)
-            return
+            return false
 
           if sindex != len(grouped):
             let missing =
