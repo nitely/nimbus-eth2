@@ -283,7 +283,7 @@ func getShortMap*[T](
 ): string =
   let
     alphabet =
-      "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/#"
+      "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/#-"
     unknown = "…"
 
   var
