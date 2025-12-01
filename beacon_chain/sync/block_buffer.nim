@@ -383,6 +383,21 @@ func remove*(
 ) =
   buffer.roots.del(root)
 
+func prune*(
+    buffer: var BlocksRootBuffer,
+    epoch: Epoch
+) =
+  var entriesToDelete: seq[Eth2Digest]
+
+  let startSlot = epoch.start_slot()
+  for key, blck in buffer.roots.pairs():
+    let slot = blck[].slot()
+    if slot < startSlot:
+      entriesToDelete.add(key)
+
+  for key in entriesToDelete:
+    buffer.roots.del(key)
+
 func getOrDefault*(
     buffer: BlocksRootBuffer,
     root: Eth2Digest

@@ -256,8 +256,9 @@ proc prune*[A, B](
     entriesToDelete: seq[Eth2Digest]
     slotsToDelete: seq[Slot]
 
+  let startSlot = epoch.start_slot()
   for cslot, roots in sdag.slots.pairs():
-    if cslot.epoch() < epoch:
+    if cslot < startSlot:
       slotsToDelete.add(cslot)
       entriesToDelete.add(roots.toSeq())
 

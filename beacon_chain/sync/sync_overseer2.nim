@@ -1445,7 +1445,7 @@ proc doPeerUpdateRootsSidecars(
       head = shortLog(dag.head)
       roots = shortLog(columnRoots)
       roots_count = columnsCount
-      peer_map = overseer.getPeerColumnMap(peerEntry)
+      peer_map = shortLog(overseer.getPeerColumnMap(peerEntry))
       data_type = "columns"
 
     debug "Requesting data column sidecars by root from peer"
@@ -1491,11 +1491,12 @@ proc doPeerUpdateRootsSidecars(
       overseer.increaseSidecarsCount(
         peerEntry.maxSidecarsPerRequest, consensusFork)
 
-    debug "Processing block and sidecars by root",
-      blocks = slimLog(emptyBlobBlocks)
+    debug "Processing blocks and sidecars by root",
+      blocks = slimLog(emptyColumnBlocks)
 
     for signedBlock in emptyColumnBlocks:
-      debug "Processing block and sidecars by root", blck = slimLog(signedBlock)
+      debug "Processing single block and sidecars by root",
+        blck = slimLog(signedBlock)
       withBlck(signedBlock[]):
         when consensusFork == ConsensusFork.Fulu:
           let entry = overseer.sdag.roots.getOrDefault(forkyBlck.root)
@@ -2605,6 +2606,8 @@ proc finalMonitoringLoop(
 
       # Pruning SyncDag.
       overseer.sdag.prune(event.epoch)
+      # Pruning BlocksRootBuffer.
+      overseer.rblockBuffer.prune(event.epoch)
 
   except AsyncEventQueueFullError:
     raiseAssert "Unlimited AsyncEventQueue should not raise exception"
