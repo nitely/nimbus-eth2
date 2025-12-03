@@ -1076,13 +1076,26 @@ proc doPeerPause(
             nanoseconds(nanos)
         else:
           1.seconds
-      peerFut = peer.getFuture().join()
 
-    debug "Peer is entering sleeping state", sleep_time = timeToSlot
-    discard await race(sleepAsync(timeToSlot), peerFut)
-    if peerFut.finished():
+    # Without this check peer.getFuture() could return absolutely new Future,
+    # which will never be finished, because peer is already disconnected.
+    if peer.connectionState != ConnectionState.Connected:
       return false
 
+    let
+      peerFut = peer.getFuture().join()
+      timeFut = sleepAsync(timeToSlot)
+
+    try:
+      debug "Peer is entering sleeping state", sleep_time = timeToSlot
+      discard await race(timeFut, peerFut)
+      if peerFut.finished():
+        await cancelAndWait(timeFut)
+        return false
+      await cancelAndWait(peerFut)
+    except CancelledError as exc:
+      await cancelAndWait(timeFut, peerFut)
+      raise exc
   true
 
 proc doPeerUpdateStatus(
