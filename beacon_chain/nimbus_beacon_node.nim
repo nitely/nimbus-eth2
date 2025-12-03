@@ -2667,7 +2667,7 @@ proc run*(node: BeaconNode, stopper: StopFuture) {.raises: [CatchableError].} =
 
   node.startLightClient()
   # node.requestManager.start()
-  node.syncOverseer.start()
+  # node.syncOverseer.start()
 
   waitFor node.updateGossipStatus(wallSlot)
 
