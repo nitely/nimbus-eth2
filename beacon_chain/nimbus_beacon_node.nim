@@ -2367,14 +2367,9 @@ proc installMessageValidators(node: BeaconNode) =
                 node.optimisticProcessor.processSignedBeaconBlock(
                   signedBlock))
             else:
-              let res =
-                toValidationResult(
-                  node.processor[].processSignedBeaconBlock(
-                    MsgSource.gossip, signedBlock))
-              if res == ValidationResult.Accept:
-                node.eventBus.blockGossipPeerQueue.emit(
-                  EventBeaconBlockGossipPeerObject.init(signedBlock, src))
-              res
+              toValidationResult(
+                node.processor[].processSignedBeaconBlock(
+                  MsgSource.gossip, signedBlock))
         )
 
         # execution_payload_bid
