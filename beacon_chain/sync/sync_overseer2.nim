@@ -249,10 +249,10 @@ func getSidecarsHorizon(
   else:
     raiseAssert "Unsupported fork"
 
-func getBlobsHorizon(overseer: SyncOverseerRef2): Epoch =
+proc getBlobsHorizon(overseer: SyncOverseerRef2): Epoch =
   let
     dag = overseer.consensusManager.dag
-    currentEpoch = dag.finalizedHead.slot.epoch()
+    currentEpoch = overseer.beaconClock.currentSlot().epoch()
     horizon = dag.cfg.MIN_EPOCHS_FOR_BLOB_SIDECARS_REQUESTS
     tempEpoch =
       if currentEpoch < horizon:
@@ -266,10 +266,10 @@ func getBlobsHorizon(overseer: SyncOverseerRef2): Epoch =
   else:
     tempEpoch
 
-func getColumnsHorizon(overseer: SyncOverseerRef2): Epoch =
+proc getColumnsHorizon(overseer: SyncOverseerRef2): Epoch =
   let
     dag = overseer.consensusManager.dag
-    currentEpoch = dag.finalizedHead.slot.epoch()
+    currentEpoch = overseer.beaconClock.currentSlot().epoch()
     horizon = dag.cfg.MIN_EPOCHS_FOR_DATA_COLUMN_SIDECARS_REQUESTS
     tempEpoch =
       if currentEpoch < horizon:
