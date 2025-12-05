@@ -920,12 +920,6 @@ proc process[T](
   if len(blcks) == 0:
     return SyncProcessingResult.init(SyncProcessError.Empty)
 
-  debug "Processing request",
-    request = sr,
-    sync_ident = sq.ident,
-    queue = shortLog(sq),
-    blocks = slimLog(blcks)
-
   for blk in blocks(sq.kind, blcks):
     let res = await sq.blockVerifier(blk, maybeFinalized)
     if res.isOk():

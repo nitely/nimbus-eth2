@@ -1660,8 +1660,7 @@ proc doRangeSyncStep(
 
     debug "Sending blocks range to processor",
       blocks_count = len(blocks),
-      blocks_map = getShortMap(request, blocks.asSeq()),
-      blocks = slimLog(blocks.asSeq())
+      blocks_map = getShortMap(request, blocks.asSeq())
 
     let resp =
       await overseer.bsqueue(direction).push(
@@ -1671,7 +1670,6 @@ proc doRangeSyncStep(
       code = resp.code, count = resp.count, blck = shortLog(resp.blck),
       blocks_count = len(blocks),
       blocks_map = getShortMap(request, blocks.asSeq()),
-      blocks = slimLog(blocks.asSeq()),
       block_buffer = shortLog(overseer.sbuffer(direction)),
       blocks_queue = shortLog(overseer.bsqueue(direction)),
       sidecars_queue = shortLog(overseer.bsqueue(direction))
@@ -1858,7 +1856,6 @@ proc doRangeSidecarsStep(
           blobs_map = getShortMap(request, grouped),
           blocks_count = len(blocks),
           blocks_map = getShortMap(request, blocks),
-          blocks = slimLog(blocks),
           blobs = slimLog(data.asSeq())
 
         let res = await overseer.ssqueue(direction).push(
@@ -1869,7 +1866,6 @@ proc doRangeSidecarsStep(
           blobs_map = getShortMap(request, grouped),
           blocks_count = len(blocks),
           blocks_map = getShortMap(request, blocks),
-          blocks = slimLog(blocks),
           blobs = slimLog(data.asSeq())
 
         # In case we not advance - we should cleanup blob/column quarantines on
@@ -2036,8 +2032,7 @@ proc doRangeSidecarsStep(
         debug "Sending sidecars range to processor",
           peer_map = shortLog(peerMap),
           blocks_count = len(blocks),
-          blocks_map = getShortMap(request, blocks),
-          blocks = slimLog(blocks)
+          blocks_map = getShortMap(request, blocks)
 
         let res = await overseer.ssqueue(direction).push(
           request, blocks, maybeFinalized = true)
@@ -2046,8 +2041,7 @@ proc doRangeSidecarsStep(
           code = res.code, count = res.count, blck = shortLog(res.blck),
           peer_map = shortLog(peerMap),
           blocks_count = len(blocks),
-          blocks_map = getShortMap(request, blocks),
-          blocks = slimLog(blocks)
+          blocks_map = getShortMap(request, blocks)
 
         if res.code == SyncProcessError.MissingSidecars:
           let
