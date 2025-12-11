@@ -184,7 +184,7 @@ proc setupVerifier(
   (collector(aq), verifier(aq))
 
 suite "SyncManager test suite":
-  for kind in [SyncQueueKind.Backward]:
+  for kind in [SyncQueueKind.Forward, SyncQueueKind.Backward]:
     asyncTest "[SyncQueue#" & $kind & "] Smoke [single peer] test":
       # Four ranges was distributed to single peer only.
       let
@@ -567,7 +567,7 @@ suite "SyncManager test suite":
         f13.finished == true
 
       check:
-        (await noCancel f22).count == -63
+        (await noCancel f22).count == -32
       check:
         f21.finished == true
         f22.finished == true
@@ -724,7 +724,7 @@ suite "SyncManager test suite":
         f13.finished == true
 
       check:
-        (await noCancel f22).count == -63
+        (await noCancel f22).count == -32
       check:
         f21.finished == true
         f22.finished == true
@@ -790,6 +790,139 @@ suite "SyncManager test suite":
         f43.finished == true
 
       await noCancel wait(verifier.verifier, 2.seconds)
+
+    asyncTest "[SyncQueue#" & $kind & "] finish test":
+      const
+        TestScenarios =
+          [
+            (
+              Slot(0), Slot(127),
+              (Slot(0) .. Slot(127), Opt.none(VerifierError)), 4, false, 32
+            ),
+            (
+              Slot(0), Slot(127),
+              (Slot(0) .. Slot(127), Opt.none(VerifierError)), 5, true, 32
+            ),
+            (
+              Slot(0), Slot(120),
+              (Slot(0) .. Slot(120), Opt.none(VerifierError)), 4, false, 25
+            ),
+            (
+              Slot(0), Slot(120),
+              (Slot(0) .. Slot(120), Opt.none(VerifierError)), 5, true, 25
+            ),
+            (
+              Slot(32), Slot(159),
+              (Slot(32) .. Slot(159), Opt.none(VerifierError)), 4, false, 32
+            ),
+            (
+              Slot(32), Slot(159),
+              (Slot(32) .. Slot(159), Opt.none(VerifierError)), 5, true, 32
+            ),
+            (
+              Slot(32), Slot(150),
+              (Slot(32) .. Slot(150), Opt.none(VerifierError)), 4, false, 23
+            ),
+            (
+              Slot(32), Slot(150),
+              (Slot(32) .. Slot(150), Opt.none(VerifierError)), 5, true, 23
+            ),
+            (
+              Slot(13), Slot(120),
+              (Slot(13) .. Slot(120), Opt.none(VerifierError)), 4, false, 12
+            ),
+            (
+              Slot(13), Slot(120),
+              (Slot(13) .. Slot(120), Opt.none(VerifierError)), 5, true, 12
+            ),
+            (
+              Slot(43), Slot(150),
+              (Slot(43) .. Slot(150), Opt.none(VerifierError)), 4, false, 12
+            ),
+            (
+              Slot(43), Slot(150),
+              (Slot(43) .. Slot(150), Opt.none(VerifierError)), 5, true, 12
+            )
+          ]
+
+      for scenario in TestScenarios:
+        let
+          verifier = setupVerifier(kind, [scenario[2]])
+          sq =
+            case kind
+            of SyncQueueKind.Forward:
+              SyncQueue.init(
+                SomeTPeer, kind, scenario[0], scenario[1],
+                32'u64, # 32 slots per request
+                scenario[3], # N concurrent requests
+                2, # 2 failures allowed
+                getStaticSlotCb(scenario[0]),
+                verifier.collector,
+                testforkAtEpoch)
+            of SyncQueueKind.Backward:
+              SyncQueue.init(
+                SomeTPeer, kind, scenario[1], scenario[0],
+                32'u64, # 32 slots per request
+                scenario[3], # N concurrent requests
+                2, # 2 failures allowed
+                getStaticSlotCb(scenario[1]),
+                verifier.collector,
+                testforkAtEpoch)
+
+          peer = SomeTPeer.init("1")
+          r11 = sq.pop(Slot(1000), peer)
+          r12 = sq.pop(Slot(1000), peer)
+          r13 = sq.pop(Slot(1000), peer)
+          r14 = sq.pop(Slot(1000), peer)
+          d11 = createChain(r11.data)
+          d12 = createChain(r12.data)
+          d13 = createChain(r13.data)
+          d14 = createChain(r14.data)
+
+        if not(scenario[4]):
+          let
+            f11 = await sq.push(r11, d11)
+            f12 = await sq.push(r12, d12)
+            f13 = await sq.push(r13, d13)
+            f14 = await sq.push(r14, d14)
+
+          check:
+            f11.count == 32
+            f12.count == 32
+            f13.count == 32
+            f14.count == scenario[5]
+
+          let
+            r1 = sq.pop(Slot(10000), peer)
+            r2 = sq.pop(Slot(20000), peer)
+            r3 = sq.pop(Slot(30000), peer)
+
+          check:
+            r1.isEmpty() == true
+            r2.isEmpty() == true
+            r3.isEmpty() == true
+        else:
+          let
+            f11 = await sq.push(r11, d11)
+            f12 = await sq.push(r12, d12)
+            f13 = await sq.push(r13, d13)
+
+          check:
+            f11.count == 32
+            f12.count == 32
+            f13.count == 32
+
+          check:
+            isEmpty(sq.pop(Slot(10000), peer)) == true
+            isEmpty(sq.pop(Slot(20000), peer)) == true
+            isEmpty(sq.pop(Slot(30000), peer)) == true
+
+          let
+            f14 = await sq.push(r14, d14)
+          check:
+            f14.count == scenario[5]
+
+        await noCancel wait(verifier.verifier, 2.seconds)
 
     asyncTest "[SyncQueue#" & $kind & "] Empty responses should not " &
               "advance queue until other peers will not confirm [3 peers] " &
@@ -1552,7 +1685,7 @@ suite "SyncManager test suite":
 
     check:
       (await noCancel f21).count == 0
-      (await noCancel f22).count == -159
+      (await noCancel f22).count == -128
       (await noCancel f23).count == 0
 
     for i in 0 ..< 2:
@@ -1601,7 +1734,7 @@ suite "SyncManager test suite":
 
     check:
       (await noCancel f41).count == 0
-      (await noCancel f42).count == -159
+      (await noCancel f42).count == -128
       (await noCancel f43).count == 0
 
     for i in 0 ..< 3:
@@ -1650,7 +1783,7 @@ suite "SyncManager test suite":
 
     check:
       (await noCancel f61).count == 0
-      (await noCancel f62).count == -159
+      (await noCancel f62).count == -128
       (await noCancel f63).count == 0
 
     for i in 0 ..< 5:

@@ -440,31 +440,41 @@ proc epochFilter*[T](squeue: SyncQueue[T], srange: SyncRange): SyncRange =
     else:
       srange
 
-func next*[T](sq: SyncQueue[T], srange: SyncRange): SyncRange {.inline.} =
-  let slot = srange.slot + srange.count
-  if slot == FAR_FUTURE_SLOT:
+func next*[T](sq: SyncQueue[T], currentSlot: Slot): Opt[SyncRange] {.inline.} =
+  if currentSlot == FAR_FUTURE_SLOT:
     # Finish range
-    srange
-  elif slot < srange.slot:
-    # Range that causes uint64 overflow, fixing.
-    SyncRange.init(slot, uint64(FAR_FUTURE_SLOT - srange.count))
-  else:
-    if slot + sq.chunkSize < slot:
-      SyncRange.init(slot, uint64(FAR_FUTURE_SLOT - sq.chunkSize))
-    else:
-      SyncRange.init(slot, sq.chunkSize)
+    return Opt.none(SyncRange)
 
-func prev*[T](sq: SyncQueue[T], srange: SyncRange): SyncRange {.inline.} =
-  if srange.slot == GENESIS_SLOT:
-    # Start range
-    srange
-  else:
-    let slot = srange.slot - sq.chunkSize
-    if slot > srange.slot:
-      # Range that causes uint64 underflow, fixing.
-      SyncRange.init(GENESIS_SLOT, uint64(srange.slot))
+  let slot = currentSlot + sq.chunkSize
+  if slot < currentSlot:
+    # Range that causes uint64 overflow, fixing.
+    if currentSlot < sq.finalSlot:
+      Opt.some(SyncRange.init(currentSlot, sq.finalSlot - currentSlot + 1))
     else:
-      SyncRange.init(slot, sq.chunkSize)
+      Opt.some(SyncRange.init(currentSlot, FAR_FUTURE_SLOT - currentSlot))
+  else:
+    if slot > sq.finalSlot:
+      Opt.some(SyncRange.init(currentSlot, sq.finalSlot - currentSlot + 1))
+    else:
+      Opt.some(SyncRange.init(currentSlot, sq.chunkSize))
+
+func prev*[T](sq: SyncQueue[T], currentSlot: Slot): Opt[SyncRange] {.inline.} =
+  if currentSlot == GENESIS_SLOT:
+    # Start range
+    return Opt.none(SyncRange)
+
+  let slot = currentSlot - sq.chunkSize
+  if slot > currentSlot:
+    # Range that causes uint64 underflow, fixing.
+    if currentSlot > sq.finalSlot:
+      Opt.some(SyncRange.init(sq.finalSlot, currentSlot - sq.finalSlot))
+    else:
+      Opt.some(SyncRange.init(GENESIS_SLOT, uint64(currentSlot)))
+  else:
+    if slot < sq.finalSlot:
+      Opt.some(SyncRange.init(sq.finalSlot, currentSlot - sq.finalSlot))
+    else:
+      Opt.some(SyncRange.init(slot, sq.chunkSize))
 
 func contains*(srange: SyncRange, slot: Slot): bool {.inline.} =
   ## Returns `true` if `slot` is in range of `srange`.
@@ -723,6 +733,41 @@ proc rewardForGaps[T](sq: SyncQueue[T], score: int) =
     else:
       gap.item.updateScore(score)
 
+proc getNextRequest*[T](sq: SyncQueue[T], item: T): SyncRequest[T] =
+  let newRange =
+    case sq.kind
+    of SyncQueueKind.Forward:
+      let startSlot =
+        if len(sq.requests) > 0:
+          let lastRange = sq.requests[^1].data
+          if lastRange.slot + lastRange.count < lastRange.slot:
+            return SyncRequest.init(sq.kind, item)
+          lastRange.slot + lastRange.count
+        else:
+          sq.inpSlot
+      if startSlot >= sq.finalSlot:
+        return SyncRequest.init(sq.kind, item)
+      let res = sq.next(startSlot).valueOr:
+        return SyncRequest.init(sq.kind, item)
+      res
+    of SyncQueueKind.Backward:
+      let startSlot =
+        if len(sq.requests) > 0:
+          let lastRange = sq.requests[^1].data
+          if lastRange.slot <= sq.finalSlot:
+            return SyncRequest.init(sq.kind, item)
+          lastRange.slot
+        else:
+          if sq.inpSlot <= sq.finalSlot:
+            return SyncRequest.init(sq.kind, item)
+          sq.inpSlot + 1
+      if startSlot < sq.finalSlot:
+        return SyncRequest.init(sq.kind, item)
+      let res = sq.prev(startSlot).valueOr:
+        return SyncRequest.init(sq.kind, item)
+      res
+  SyncRequest.init(sq, sq.kind, sq.epochFilter(newRange), item)
+
 proc pop*[T](sq: SyncQueue[T], peerMaxSlot: Slot, item: T): SyncRequest[T] =
   # Searching requests queue for an empty space.
   var count = 0
@@ -748,35 +793,12 @@ proc pop*[T](sq: SyncQueue[T], peerMaxSlot: Slot, item: T): SyncRequest[T] =
   doAssert(count < sq.requestsCount,
            "You should not pop so many requests for single peer")
 
-  # No empty spaces has been found in queue, so we adding new request.
-  let newrange =
-    if len(sq.requests) > 0:
-      # All requests are filled, adding one more request.
-      let lastrange = sq.requests[^1].data
-      if sq.finalSlot in lastrange:
-        # Requests queue is already at finish position, we are not going to add
-        # one more request range.
-        return SyncRequest.init(sq.kind, item)
-
-      case sq.kind
-      of SyncQueueKind.Forward:
-        sq.next(lastrange)
-      of SyncQueueKind.Backward:
-        sq.prev(lastrange)
-    else:
-      case sq.kind
-      of SyncQueueKind.Forward:
-        SyncRange.init(sq.inpSlot, sq.chunkSize)
-      of SyncQueueKind.Backward:
-        SyncRange.init(sq.inpSlot - (sq.chunkSize - 1), sq.chunkSize)
-
-  if newrange.slot > peerMaxSlot:
-    # Peer could not satisfy our request, returning empty one.
-    SyncRequest.init(sq.kind, item)
-  else:
-    let request = SyncRequest.init(sq, sq.kind, sq.epochFilter(newrange), item)
-    sq.requests.addLast(SyncQueueItem.init(request))
-    request
+  let request = sq.getNextRequest(item)
+  if request.data.slot > peerMaxSlot:
+    # Peer could not satisfy our request - returning empty request.
+    return SyncRequest.init(sq.kind, item)
+  sq.requests.addLast(SyncQueueItem.init(request))
+  request
 
 proc wakeupWaiters*[T](sq: SyncQueue[T], resetFlag = false) =
   ## Wakeup one or all blocked waiters.
@@ -1202,7 +1224,12 @@ proc push*[T](
               sync_ident = sq.ident,
               topics = "sync"
         await sq.resetWait(point)
-        res = getRetreatCount(sr.data.slot, point)
+        res =
+          case sq.kind
+          of SyncQueueKind.Forward:
+            getRetreatCount(sr.data.start_slot(), point)
+          of SyncQueueKind.Backward:
+            getRetreatCount(sr.data.last_slot(), point)
     SyncPushResponse(code: pres.code, count: res, blck: pres.blck)
   except CancelledError as exc:
     sq.del(sr)
