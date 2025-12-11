@@ -221,7 +221,23 @@ func getMissingColumnsLog(
         )
       else:
         raiseAssert "Unsupported fork"
-  "[ " & res.join(",") & " ]"
+  "[" & res.join(",") & "]"
+
+func getLastSeenHeadLog(
+    overseer: SyncOverseerRef2
+): string =
+  if overseer.lastSeenHead.isNone():
+    "[n/a]"
+  else:
+    shortLog(overseer.lastSeenHead.get())
+
+func getLastSeenFinalizedHeadLog(
+  overseer: SyncOverseerRef2
+) =
+  if overseer.lastSeenCheckpoint.isNone():
+    "[n/a]"
+  else:
+    shortLog(overseer.lastSeenCheckpoint.get())
 
 func consensusForkAtEpoch(
     overseer: SyncOverseerRef2,
@@ -689,7 +705,7 @@ proc initPeer(
   else:
     overseer.sdag.peers.mgetOrPut(peer.getKey(), PeerEntryRef.init(peer))
 
-proc updatePeer(overseer: SyncOverseerRef2, peer: Peer) =
+proc updatePeerStatus(overseer: SyncOverseerRef2, peer: Peer) =
   let
     blockId =
       peer.getHeadBlockId()
@@ -1111,16 +1127,16 @@ proc doPeerUpdateStatus(
 
   logScope:
     peer = peer
-    peer_head = shortLog(peerHead)
-    peer_finalized_head = shortLog(peerFinalizedCheckpoint)
-    status_age = peerStatusAge
-    status_period = statusPeriod
 
   if peerStatusAge < statusPeriod:
     # Peer's status information is still relevant
     return true
 
   debug "Requesting fresh status information from peer"
+    peer_head = shortLog(peerHead),
+    peer_finalized_head = shortLog(peerFinalizedCheckpoint),
+    status_age = peerStatusAge,
+    status_period = statusPeriod
 
   if not(await peer.updateStatus()):
     debug "Failed to obtain fresh status information from peer"
@@ -1135,12 +1151,20 @@ proc doPeerUpdateStatus(
       (dag.cfg.timeParams.SLOT_DURATION * StatusStalePeriod)
     if peerStatusAge >= stalePeriod:
       peer.updateScore(PeerScoreStaleStatus)
-      debug "Peer's status information is stale"
+      debug "Peer's status information is stale",
+        peer_head = shortLog(newPeerHead),
+        peer_finalized_head = shortLog(peer.getFinalizedCheckpoint()),
+        status_age = Moment.now() - peer.getStatusLastTime(),
+        status_period = overseer.getStatusPeriod(peer)
   else:
     # Updating data structures about newly received Peer's status information.
-    overseer.updatePeer(peer)
+    overseer.updatePeerStatus(peer)
     peer.updateScore(PeerScoreGoodStatus)
-    debug "Peer status information updated"
+    debug "Peer status information updated",
+      peer_head = shortLog(newPeerHead),
+      peer_finalized_head = shortLog(peer.getFinalizedCheckpoint()),
+      status_age = Moment.now() - peer.getStatusLastTime(),
+      status_period = overseer.getStatusPeriod(peer)
 
   true
 
@@ -1626,6 +1650,8 @@ proc doRangeSyncStep(
     peer_checkpoint = shortLog(checkpoint)
     peer_head = shortLog(peer.getHeadBlockId())
     peer_ea_slot = getEaSlotLog(peer)
+    last_seen_head = overseer.getLastSeenHeadLog()
+    last_seen_finalized = overseer.getLastSeenFinalizedHeadLog()
     peer_agent = $peer.getRemoteAgent()
     peer_score = peer.getScore()
     peer_speed = peer.netKbps()
@@ -2403,16 +2429,6 @@ proc timeMonitoringLoop(
           backwardTotal(), backwardRemains())
 
       let
-        lastSeenHead =
-          if overseer.lastSeenHead.isNone():
-            "[n/a]"
-          else:
-            shortLog(overseer.lastSeenHead.get())
-        lastSeenFinalizedHead =
-          if overseer.lastSeenCheckpoint.isNone():
-            "[n/a]"
-          else:
-            shortLog(overseer.lastSeenCheckpoint.get())
         finalizedDistance =
           if overseer.finalizedDistance().isNone():
             "[n/a]"
@@ -2444,8 +2460,8 @@ proc timeMonitoringLoop(
         head = shortLog(dag.head),
         finalized = shortLog(
           getStateField(dag.headState, finalized_checkpoint)),
-        last_seen_head = lastSeenHead,
-        last_seen_finalized = lastSeenFinalizedHead,
+        last_seen_head = overseer.getLastSeenHeadLog(),
+        last_seen_finalized = overseer.getLastSeenFinalizedHeadLog(),
         finalized_distance = finalizedDistance,
         backfill_distance = backfillDistance,
         blob_horizon = overseer.getBlobsHorizon().start_slot(),
@@ -2709,7 +2725,7 @@ proc mainLoop*(
         await noCancel allFutures(pending)
         return
     let entry = overseer.initPeer(peer)
-    overseer.updatePeer(peer)
+    overseer.updatePeerStatus(peer)
     entry.peerLoopFut = overseer.startPeer(peer)
 
 proc start*(overseer: SyncOverseerRef2) =
