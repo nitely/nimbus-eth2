@@ -233,7 +233,7 @@ func getLastSeenHeadLog(
 
 func getLastSeenFinalizedHeadLog(
   overseer: SyncOverseerRef2
-) =
+): string =
   if overseer.lastSeenCheckpoint.isNone():
     "[n/a]"
   else:
@@ -1132,7 +1132,7 @@ proc doPeerUpdateStatus(
     # Peer's status information is still relevant
     return true
 
-  debug "Requesting fresh status information from peer"
+  debug "Requesting fresh status information from peer",
     peer_head = shortLog(peerHead),
     peer_finalized_head = shortLog(peerFinalizedCheckpoint),
     status_age = peerStatusAge,
