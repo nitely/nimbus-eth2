@@ -403,7 +403,7 @@ type
         name: "debug-stop-at-epoch" .}: uint64
 
       stopAtSyncedEpoch* {.
-        debug
+        hidden
         desc: "The synced epoch at which to exit the program. (for testing purposes)"
         defaultValue: 0
         name: "stop-at-synced-epoch" .}: uint64
