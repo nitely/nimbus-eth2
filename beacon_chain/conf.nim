@@ -1035,7 +1035,6 @@ type
       name: "graffiti" .}: Option[GraffitiBytes]
 
     stopAtEpoch* {.
-      debug
       desc: "A positive epoch selects the epoch at which to stop"
       defaultValue: 0
       name: "debug-stop-at-epoch" .}: uint64
