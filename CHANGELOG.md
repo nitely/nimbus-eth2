@@ -1,6 +1,8 @@
 2025-12-18 v25.12.0
 ===================
 
+The Nimbus consensus client `v25.12.0` is a `medium-urgency` release for mainnet due to network stability improvements. To access blobs in Fusaka and later in this release, use the `--light-supernode` option. The undocumented `--debug-peerdas-supernode` option will be removed in a pending release.
+
 ### Improvements
 
 - Allow genesis epoch BPOs:
