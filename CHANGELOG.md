@@ -1,3 +1,19 @@
+2025-12-18 v25.12.0
+===================
+
+### Improvements
+
+- Allow genesis epoch BPOs:
+  https://github.com/status-im/nimbus-eth2/pull/7788
+
+### Fixes
+
+- Ensure distinct Fulu and Gloas fork digests:
+  https://github.com/status-im/nimbus-eth2/pull/7794
+
+- Fix stack traces memory leak:
+  https://github.com/status-im/nimbus-eth2/pull/7791
+
 2025-11-28 v25.11.1
 ===================
 
