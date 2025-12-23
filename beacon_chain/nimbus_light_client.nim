@@ -33,7 +33,7 @@ proc main() {.noinline, raises: [CatchableError].} =
       "Copyright (c) 2022-" & compileYear & " Status Research & Development GmbH"
 
   var config = LightClientConf.loadWithBanners(
-    banner, copyright, [specBanner], loggerSetup = true
+    banner, copyright, [specBanner], setupLogger = true
   ).valueOr:
     writePanicLine error # Logging not yet set up
     quit QuitFailure

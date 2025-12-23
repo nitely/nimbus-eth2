@@ -3026,7 +3026,7 @@ proc main*() {.noinline, raises: [CatchableError].} =
     "Copyright (c) 2019-" & compileYear & " Status Research & Development GmbH"
 
   var config = BeaconNodeConf.loadWithBanners(
-    clientId, copyright, [specBanner], loggerSetup = true
+    clientId, copyright, [specBanner], setupLogger = true
   ).valueOr:
     writePanicLine error # Logging not yet set up
     quit QuitFailure

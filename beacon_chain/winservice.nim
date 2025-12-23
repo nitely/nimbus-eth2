@@ -150,7 +150,7 @@ when defined(windows):
 
       var config = loadWithBanners(
         argConfigType, argHelpBanner, argCopyright,
-        argVersions, false, environment, loggerSetup = true
+        argVersions, false, environment, setupLogger = true
       ).valueOr:
         reportServiceStatus(SERVICE_STOPPED, ERROR_BAD_CONFIGURATION, 0)
         quit QuitFailure
