@@ -174,6 +174,9 @@ proc setupLogging*(
       echo "Invalid value for --log-level. " & err.msg
     quit 1
 
+proc setupLogging*(config: auto) =
+  setupLogging(config.logLevel, config.logStdout, config.logFile)
+
 proc setupTaskpool*(numThreads: int): Taskpool =
   let taskpool =
     try:
@@ -198,6 +201,7 @@ proc loadWithBanners*(
     versions: openArray[string],
     ignoreUnknown = false,
     environment: openArray[string] = [],
+    loggerSetup: proc (config: ConfType) {.raises: [].} = nil
 ): Result[ConfType, string] =
   let
     version =
@@ -227,6 +231,7 @@ proc loadWithBanners*(
           if config.configFile.isSome:
             sources.addConfigFile(Toml, config.configFile.get)
         ,
+        loggerSetup = loggerSetup
       )
     except CatchableError as exc:
       # Logging not configured yet!
