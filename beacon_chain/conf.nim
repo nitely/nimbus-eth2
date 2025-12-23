@@ -1156,12 +1156,6 @@ type
 
   AnyConf* = BeaconNodeConf | ValidatorClientConf | SigningNodeConf
 
-proc obsoleteCmdOpt*(T: type AnyConf, opt, msg: string) =
-  if msg.len == 0:
-    warn "Ignoring deprecated configuration option", opt
-  else:
-    warn "Ignoring deprecated configuration option", opt, msg
-
 proc loadEth2Network*(eth2Network: Option[string]): Eth2NetworkMetadata =
   let metadata =
     if eth2Network.isSome:
