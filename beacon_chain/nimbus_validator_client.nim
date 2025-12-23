@@ -647,7 +647,7 @@ proc main() {.noinline, raises: [CatchableError].} =
 
   let
     config = ValidatorClientConf.loadWithBanners(
-      banner, copyright, [specBanner], loggerSetup = setupLogging
+      banner, copyright, [specBanner], loggerSetup = true
     ).valueOr:
       writePanicLine error # Logging not yet set up
       quit QuitFailure

@@ -501,7 +501,7 @@ proc main() {.noinline, raises: [CatchableError].} =
       "Copyright (c) 2021-" & compileYear & " Status Research & Development GmbH"
 
   let config = SigningNodeConf.loadWithBanners(
-    banner, copyright, [specBanner], loggerSetup = setupLogging
+    banner, copyright, [specBanner], loggerSetup = true
   ).valueOr:
     writePanicLine error # Logging not yet set up
     quit QuitFailure
