@@ -1657,11 +1657,11 @@ proc doRangeSyncStep(
     peer_speed = peer.netKbps()
     direction = direction
 
-  debug "New blocks range request"
-
   if request.isEmpty():
     debug "Empty request received from blocks queue"
     return true
+
+  debug "New blocks range request"
 
   try:
     let
@@ -1790,11 +1790,11 @@ proc doRangeSidecarsStep(
     peer_speed = peer.netKbps()
     direction = direction
 
-  debug "New sidecars range request"
-
   if request.isEmpty():
     debug "Empty request received from sidecars queue"
     return true
+
+  debug "New sidecars range request"
 
   if not(overseer.checkDataAvailable(peer, direction, request.data)):
     debug "Request cannot be satisfied by the peer",
@@ -2679,6 +2679,13 @@ proc finalMonitoringLoop(
     discard
 
   debug "Finalization monitoring stopped"
+
+proc lateBlockMonitoringLoop*(
+    overseer: SyncOverseerRef2
+): Future[void] {.async: (raises: []).} =
+  let dag = overseer.consensusManager.dag
+
+
 
 proc mainLoop*(
     overseer: SyncOverseerRef2
