@@ -241,7 +241,7 @@ proc loadWithBanners*(
           if config.configFile.isSome:
             sources.addConfigFile(Toml, config.configFile.get)
         ,
-        loggerSetup = if setupLogger: loggerSetup(ConfType) else: nil
+        onLoaded = if setupLogger: loggerSetup(ConfType) else: nil
       )
     except CatchableError as exc:
       # Logging not configured yet!
