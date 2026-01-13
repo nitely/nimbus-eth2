@@ -11,7 +11,7 @@ import
   std/[json, options, times],
   chronos, bearssl/rand, chronicles, confutils, stint, json_serialization,
   web3, eth/common/keys, eth/p2p/discoveryv5/random2,
-  stew/[io2, byteutils], json_rpc/jsonmarshal,
+  stew/[io2, byteutils],
   ../beacon_chain/conf,
   ../beacon_chain/el/el_manager,
   ../beacon_chain/networking/eth2_network,
@@ -418,7 +418,7 @@ proc doCreateTestnet*(config: CliConfig,
 
     try:
       let blockAsJson = genesisBlockContents.get
-      genesisBlock = JrpcConv.decode(blockAsJson, BlockObject)
+      genesisBlock = EthJson.decode(blockAsJson, BlockObject)
     except CatchableError as err:
       error "Failed to load the genesis block from json",
             err = err.msg
