@@ -1378,8 +1378,11 @@ proc doPeerUpdateRootsSidecars(
         let
           peerMap = overseer.getPeerColumnMap(peerEntry)
           request =
-            overseer.columnQuarantine[].fetchMissingSidecars(
-              bid.root, forkyBlck, peerMap)
+            if len(forkyBlck.message.body.blob_kzg_commitments) == 0:
+              DataColumnsByRootIdentifier()
+            else:
+              overseer.columnQuarantine[].fetchMissingSidecars(
+                bid.root, peerMap)
         if len(request.indices) > 0:
           # len(request.indices) == 0 when we already have data column sidecars
           # which peer could provide.
@@ -2522,11 +2525,13 @@ proc gossipMonitoringLoop(
             elif consensusFork == ConsensusFork.Fulu:
               let res =
                 if forkyBlck.root in overseer.blockQuarantine[].sidecarless:
-                  if overseer.columnQuarantine[].hasSidecars(
-                    forkyBlck.root, forkyBlck):
+                  if len(forkyBlck.message.body.blob_kzg_commitments) == 0:
                     false
                   else:
-                    true
+                    if overseer.columnQuarantine[].hasSidecars(forkyBlck.root):
+                      false
+                    else:
+                      true
                 else:
                   false
               (BlockId(slot: forkyBlck.message.slot, root: forkyBlck.root), res)
@@ -2680,11 +2685,28 @@ proc finalMonitoringLoop(
 
   debug "Finalization monitoring stopped"
 
-proc lateBlockMonitoringLoop*(
-    overseer: SyncOverseerRef2
-): Future[void] {.async: (raises: []).} =
-  let dag = overseer.consensusManager.dag
+# proc lateBlockMonitoringLoop*(
+#     overseer: SyncOverseerRef2
+# ): Future[void] {.async: (raises: []).} =
+#   let
+#     dag = overseer.consensusManager.dag
 
+#   while true:
+#     try:
+#       let
+#         wallSlot = overseer.beaconClock.currentSlot()
+#         syncedSlot =
+#           if overseer.lastSeenHead.isNone():
+#             wallSlot
+#           else:
+#             overseer.lastSeenHead.get.slot
+
+#       if syncedSlot > dag.head.slot:
+
+
+
+#     except CancelledError:
+#       return
 
 
 proc mainLoop*(
