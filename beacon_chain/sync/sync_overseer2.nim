@@ -2685,29 +2685,33 @@ proc finalMonitoringLoop(
 
   debug "Finalization monitoring stopped"
 
-# proc lateBlockMonitoringLoop*(
-#     overseer: SyncOverseerRef2
-# ): Future[void] {.async: (raises: []).} =
-#   let
-#     dag = overseer.consensusManager.dag
+proc lateBlockMonitoringLoop*(
+    overseer: SyncOverseerRef2
+): Future[void] {.async: (raises: []).} =
+  let
+    dag = overseer.consensusManager.dag
 
-#   while true:
-#     try:
-#       let
-#         wallSlot = overseer.beaconClock.currentSlot()
-#         syncedSlot =
-#           if overseer.lastSeenHead.isNone():
-#             wallSlot
-#           else:
-#             overseer.lastSeenHead.get.slot
+  debug "Late block monitoring established"
 
-#       if syncedSlot > dag.head.slot:
+  try:
+    while true:
+      let
+        wallSlot = overseer.beaconClock.currentSlot()
+        syncedSlot =
+          if overseer.lastSeenHead.isNone():
+            wallSlot
+          else:
+            overseer.lastSeenHead.get.slot
 
+      if syncedSlot > dag.head.slot:
+        discard
 
+      await sleepAsync(1.seconds)
 
-#     except CancelledError:
-#       return
+  except CancelledError:
+    discard
 
+  debug "Late block monitoring stopped"
 
 proc mainLoop*(
     overseer: SyncOverseerRef2
@@ -2736,6 +2740,7 @@ proc mainLoop*(
     finalMonitoringLoopFut = overseer.finalMonitoringLoop()
     timeMonitoringLoopFut = overseer.timeMonitoringLoop()
     maintenanceLoopFut = overseer.maintenanceLoop()
+    lateBlockMonitoringLoopFut = overseer.lateBlockMonitoringLoop()
 
   while true:
     let peer =
@@ -2744,14 +2749,10 @@ proc mainLoop*(
       except CancelledError:
         # TODO (cheatfate): Release all peers?
         debug "Sync overseer interrupted"
-        let pending = @[
-          gossipMonitoringLoopFut.cancelAndWait(),
-          blockMonitoringLoopFut.cancelAndWait(),
-          finalMonitoringLoopFut.cancelAndWait(),
-          timeMonitoringLoopFut.cancelAndWait(),
-          maintenanceLoopFut.cancelAndWait()
-        ]
-        await noCancel allFutures(pending)
+        await cancelAndWait(
+          gossipMonitoringLoopFut, blockMonitoringLoopFut,
+          finalMonitoringLoopFut, timeMonitoringLoopFut,
+          maintenanceLoopFut, lateBlockMonitoringLoopFut)
         return
     let entry = overseer.initPeer(peer)
     overseer.updatePeerStatus(peer)
