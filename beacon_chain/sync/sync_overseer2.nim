@@ -963,6 +963,14 @@ proc verifyBlock(
       await overseer.blockProcessor.addBlock(
         MsgSource.sync, forkyBlck, noSidecars, maybeFinalized = maybeFinalized)
 
+proc verifyBlock(
+    overseer: SyncOverseerRef2,
+    signedBlock: ForkedSignedBeaconBlock,
+    maybeFinalized: bool
+): Future[Result[void, VerifierError]] {.
+  async: (raw: true, raises: [CancelledError]).} =
+  verifyBlock(overseer, newClone signedBlock, maybeFinalized)
+
 proc getStatusPeriod*(
     overseer: SyncOverseerRef2,
     peer: Peer
@@ -2690,6 +2698,7 @@ proc lateBlockMonitoringLoop*(
 ): Future[void] {.async: (raises: []).} =
   let
     dag = overseer.consensusManager.dag
+    quarantine = overseer.consensusManager.quarantine
 
   debug "Late block monitoring established"
 
@@ -2704,7 +2713,39 @@ proc lateBlockMonitoringLoop*(
             overseer.lastSeenHead.get.slot
 
       if syncedSlot > dag.head.slot:
-        discard
+        for blck in quarantine[].pop(dag.head.root):
+          debug "Processing late block from quarantine",
+            block_root = shortLog(blck.root)
+          let res = await overseer.verifyBlock(blck, maybeFinalized = false)
+          if res.isErr():
+            debug "Late block processor response", reason = res.error,
+              block_root = shortLog(blck.root)
+            if res.error == VerifierError.MissingSidecars:
+              let entry = overseer.sdag.roots.getOrDefault(blck.root)
+              if not(isNil(entry)):
+                debug "Late block is already known, updating flags",
+                  reason = res.error,
+                  missing_sidecars =
+                    (DagEntryFlag.MissingSidecars in entry.flags)
+                entry.flags.incl(DagEntryFlag.MissingSidecars)
+                continue
+              let blockId = BlockId(slot: blck.slot, root: blck.root)
+              debug "Late block is not known, adding new entry",
+                bid = shortLog(blockId)
+              discard
+                overseer.sdag.roots.mgetOrPut(
+                  blockId.root, SyncDagEntryRef.init(blockId))
+              overseer.updatePeer(
+                overseer.localPeerId, peerMustPresent = false,
+                blockId.slot, blockId.root,
+                getForkedBlockField(blck, parent_root),
+                sidecarsMissed = true)
+          else:
+            debug "Late block processor response", reason = "ok",
+              block_root = shortLog(blck.root)
+            # If block was added succesfully block processor will continue
+            # process of adding blocks from quarantine.
+            break
 
       await sleepAsync(1.seconds)
 
