@@ -1315,10 +1315,6 @@ template slot*(x: ForkedSignedBeaconBlock |
                   ForkedTrustedSignedBeaconBlock): Slot =
   withBlck(x): forkyBlck.message.slot
 
-template parent_root*(x: ForkedSignedBeaconBlock |
-                         ForkedTrustedSignedBeaconBlock): Eth2Digest =
-  withBlck(x): forkyBlck.message.parent_root
-
 template shortLog*(x: ForkedBeaconBlock): auto =
   withBlck(x): shortLog(forkyBlck)
 
