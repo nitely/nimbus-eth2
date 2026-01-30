@@ -275,6 +275,21 @@ proc ensureSidecarsFits[A, B](
 
   ok()
 
+proc moveToFront[A, B](
+    q: var SidecarQuarantine[A, B],
+    node: DoublyLinkedNode[RootTableRecord[A]]
+) =
+  # We should preserve `lastMemoryNode` reference.
+  if q.lastMemoryNode == node:
+    q.lastMemoryNode = node.prev
+
+  q.list.remove(node)
+  if isNil(q.list.head) and isNil(q.list.tail):
+    # In case when list empty, we could not use `prepend` operation.
+    q.list.add(node)
+  else:
+    q.list.prepend(node)
+
 proc put*[A, B](
     q: var SidecarQuarantine[A, B],
     blockRoot: Eth2Digest,
@@ -329,13 +344,8 @@ proc put*[A, B](
     else:
       q.list.prepend(node)
   else:
-    # Move to first
-    q.list.remove(node)
-    if isNil(q.list.head) and isNil(q.list.tail):
-      # In case when list empty, we could not use `prepend` operation.
-      q.list.add(node)
-    else:
-      q.list.prepend(node)
+    # Move to node to front
+    q.moveToFront(node)
 
   if isNil(q.lastMemoryNode):
     q.lastMemoryNode = node
@@ -542,6 +552,8 @@ proc popSidecars*(
   if isNil(node):
     return Opt.none(seq[ref BlobSidecar])
 
+  quarantine.moveToFront(node)
+
   if node[].value.count < sidecarsCount:
     # Quarantine does not hold enough blob sidecars.
     return Opt.none(seq[ref BlobSidecar])
@@ -576,6 +588,8 @@ proc popSidecars*[A: SomeDataColumnSidecar, B: OnDataColumnSidecarCallback](
   var node = quarantine.roots.getOrDefault(blockRoot)
   if isNil(node):
     return Opt.none(seq[ref A])
+
+  quarantine.moveToFront(node)
 
   let
     supernode = (len(quarantine.custodyColumns) == NUMBER_OF_COLUMNS)
