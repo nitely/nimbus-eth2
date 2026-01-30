@@ -351,6 +351,22 @@ iterator pop*(quarantine: var Quarantine, root: Eth2Digest): ForkedSignedBeaconB
       toRemove.add(k)
       yield v
 
+iterator popSidecarlessBlocks*(
+    quarantine: var Quarantine,
+    root: Eth2Digest
+): ForkedSignedBeaconBlock =
+  # Pop sidecarless blocks whose parent is the block identified by `root`
+
+  var toRemove: seq[Eth2Digest]
+  defer: # Run even if iterator is not carried to termination
+    for k in toRemove:
+      quarantine.sidecarless.del k
+
+  for k, v in quarantine.sidecarless.mpairs():
+    if getForkedBlockField(v, parent_root) == root:
+      toRemove.add(k)
+      yield v
+
 proc addSidecarless(
     quarantine: var Quarantine, finalizedSlot: Opt[Slot],
     signedBlock: deneb.SignedBeaconBlock | electra.SignedBeaconBlock |
