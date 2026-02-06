@@ -125,7 +125,7 @@ type
   VoteTracker* = object
     current_root*: Eth2Digest
     next_root*: Eth2Digest
-    next_epoch*: Epoch
+    slot*: Slot
 
   ForkChoiceBackend* = object
     proto_array*: ProtoArray
@@ -133,10 +133,9 @@ type
     balances*: seq[Gwei]
 
   QueuedAttestation* = object
-    slot*: Slot
     attesting_indices*: seq[ValidatorIndex]
     block_root*: Eth2Digest
-    target_epoch*: Epoch
+    slot*: Slot
 
   ForkChoice* = object
     backend*: ForkChoiceBackend
@@ -145,9 +144,9 @@ type
 
 func shortLog*(vote: VoteTracker): auto =
   (
+    slot: vote.slot,
     current_root: shortLog(vote.current_root),
     next_root: shortLog(vote.next_root),
-    next_epoch: vote.next_epoch
   )
 
 chronicles.formatIt VoteTracker: it.shortLog
