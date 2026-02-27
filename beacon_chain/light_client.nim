@@ -8,8 +8,9 @@
 {.push raises: [].}
 
 import
+  metrics,
   chronicles,
-  ./gossip_processing/light_client_processor,
+  ./gossip_processing/[eth2_processor, light_client_processor],
   ./networking/[eth2_network, topic_params],
   ./spec/datatypes/altair,
   ./spec/helpers,
@@ -234,12 +235,6 @@ proc resetToFinalizedHeader*(
     current_sync_committee: altair.SyncCommittee) =
   lightClient.processor[].resetToFinalizedHeader(header, current_sync_committee)
 
-import metrics
-
-from
-  ./gossip_processing/eth2_processor
-import
-  processLightClientFinalityUpdate, processLightClientOptimisticUpdate
 
 declareCounter beacon_light_client_finality_updates_received,
   "Number of valid LC finality updates processed by this node"
