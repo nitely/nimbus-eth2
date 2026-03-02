@@ -1,3 +1,13 @@
+2025-03-02 v26.3.0
+==================
+
+The Nimbus consensus client `v26.3.0` is a `low-urgency` release which improves blob and column-handling performance.
+
+### Improvements
+
+- Improve blob and column-handling performance:
+  https://github.com/status-im/nimbus-eth2/commit/1a4774a42da0bc636e15a5d6ca234b2d6a3e05ce
+
 2025-02-18 v26.2.1
 ==================
 
