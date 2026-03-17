@@ -103,16 +103,27 @@ func init*(
     nodes: ProtoNodes(buf: @[node], offset: 0),
     indices: {node.bid.root: 0}.toTable())
 
+template updateIfBetter(
+    best: var Checkpoint, bestIdx: var Index,
+    unrealized: Checkpoint, unrealizedIdx: Index) =
+  if unrealized.epoch > best.epoch or
+      (unrealized.epoch == best.epoch and unrealizedIdx < bestIdx):
+    best = unrealized
+    bestIdx = unrealizedIdx
+
 func unrealized_justified*(
     self: ProtoArray, justified: Checkpoint): Checkpoint =
   result = justified
-  for unrealized in self.currentEpochTips.values:
-    if unrealized.justified.epoch > result.epoch:
-      result = unrealized.justified
+  var bestIdx = Index.high
+  for idx, unrealized in self.currentEpochTips:
+    result.updateIfBetter(bestIdx, unrealized.justified, idx)
 
-iterator realizePendingCheckpoints*(
-    self: var ProtoArray): FinalityCheckpoints =
+func realizePendingCheckpoints*(
+    self: var ProtoArray,
+    checkpoints: FinalityCheckpoints): FinalityCheckpoints =
   # Pull-up chain tips from previous epoch
+  var jIdx, fIdx = Index.high
+  result = checkpoints
   for idx, unrealized in self.currentEpochTips:
     let physicalIdx = idx - self.nodes.offset
     if unrealized != self.nodes.buf[physicalIdx].checkpoints:
@@ -121,8 +132,8 @@ iterator realizePendingCheckpoints*(
         checkpoints = self.nodes.buf[physicalIdx].checkpoints,
         unrealized
       self.nodes.buf[physicalIdx].checkpoints = unrealized
-
-    yield unrealized
+    result.justified.updateIfBetter(jIdx, unrealized.justified, idx)
+    result.finalized.updateIfBetter(fIdx, unrealized.finalized, idx)
 
   # Reset tip tracking for new epoch
   self.currentEpochTips.clear()
