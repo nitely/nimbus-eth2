@@ -1273,6 +1273,7 @@ AllTests-mainnet
 + Slashed validator                                                                          OK
 + Stale view, no assigned slot at stale block                                                OK
 + Votes outside range                                                                        OK
++ assign_shufflings dst longer than src                                                      OK
 + assign_shufflings replaces duties                                                          OK
 ```
 ## get_current_target_score
