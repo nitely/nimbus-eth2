@@ -243,8 +243,12 @@ AllTests-mainnet
 + Different fork versions                                                                    OK
 + Different genesis validators roots                                                         OK
 + Different lengths and blob limits                                                          OK
++ ENR fork ID transitions from Fulu to Gloas                                                 OK
++ Fulu fork digest resolved via bpos list                                                    OK
 + Fusaka devnet-2                                                                            OK
 + Glamsterdam bal-devnet-2                                                                   OK
++ nextForkEpochAtEpoch includes Gloas from Fulu                                              OK
++ nextForkEpochAtEpoch with BPO before Gloas                                                 OK
 ```
 ## EF - KZG
 ```diff
