@@ -10,7 +10,7 @@
 import
   std/[sets, tables], stew/bitops2,
   ../consensus_object_pools/spec_cache,
-  "."/fork_choice_types
+  "."/[fork_choice_types, proto_array]
 
 from ../consensus_object_pools/blockchain_dag import
   ForkChoiceInfoOffset, fork_choice_balances,
@@ -362,7 +362,7 @@ proc should_revert_confirmed_on_new_epoch*(
   not self.is_confirmed_chain_safe(dag, current_slot)
 
 func should_revert_confirmed_on_new_head*(
-    self: var ForkChoiceBackend, blck: BlockRef, current_slot: Slot): bool =
+    self: ForkChoiceBackend, blck: BlockRef, current_slot: Slot): bool =
   # Revert to finalized block if either of the following is true:
   # 1) [...],
   # 2) the latest confirmed block doesn't belong to the canonical chain,
@@ -374,6 +374,35 @@ func should_revert_confirmed_on_new_head*(
   while blck != nil and blck.slot > self.confirmed.slot:
     blck = blck.parent
   blck == nil or blck.root != self.confirmed.root
+
+func is_proto_array_consistent*(self: ForkChoiceBackend): bool =
+  self.current_slot_head in self.proto_array and
+  self.current_epoch_observed_justified.checkpoint.root in self.proto_array
+
+func should_restart_confirmation_chain*(
+    self: ForkChoiceBackend, current_slot: Slot): bool =
+  # Restart the confirmation chain if each of the following conditions are true:
+  # 1) it is the start of the current epoch,
+  # 2) epoch of self.current_epoch_observed_justified.checkpoint equals to the
+  #    previous epoch,
+  # 3) self.current_epoch_observed_justified.checkpoint equals to unrealized
+  #    justification of the head,
+  # 4) confirmed block is older than the block of
+  #    self.current_epoch_observed_justified.checkpoint.
+  template current_epoch_justified: Checkpoint =
+    self.current_epoch_observed_justified.checkpoint
+  template current_epoch_justified_slot: Slot =
+    self.proto_array.slot(current_epoch_justified.root)
+      .expect("is_proto_array_consistent")
+
+  template head_unrealized_justified: Checkpoint =
+    self.proto_array.unrealized(self.current_slot_head)
+      .expect("is_proto_array_consistent").justified
+
+  current_slot.is_epoch and
+  current_epoch_justified.epoch + 1 == current_slot.epoch and
+  current_epoch_justified == head_unrealized_justified and
+  self.confirmed.slot < current_epoch_justified_slot
 
 type CurrentTargetInfo* = object
   total_active_balance*: Gwei
