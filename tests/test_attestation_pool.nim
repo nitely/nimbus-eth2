@@ -59,7 +59,7 @@ func loadSig(a: electra.Attestation): CookedSig =
 proc pruneAtFinalization(dag: ChainDAGRef, attPool: AttestationPool) =
   if dag.needStateCachesAndForkChoicePruning():
     dag.pruneStateCachesDAG()
-    # pool[].prune() # We test logic without attestation pool / fork choice pruning
+    # pool[].prune(dag) # We test without attestation pool / fork choice pruning
 
 # -1 here is the notional index in committee for which the attestation pool
 # only requires external input regarding SingleAttestation messages. If, or
@@ -788,7 +788,7 @@ suite "Attestation pool electra processing" & preset():
 
     doAssert: dag.finalizedHead.slot != 0
 
-    pool[].prune()
+    pool[].prune(dag)
     doAssert: b10.root notin pool.forkChoice.backend
 
     # Add back the old block to ensure we have a duplicate error
@@ -847,7 +847,7 @@ suite "Attestation pool electra processing" & preset():
 
     let
       root = dag.head.root
-      unrealized = proto_array.checkpoints(root).get().unrealized
+      unrealized = proto_array.checkpoints(root).get().unrealized_justified
     check unrealized.epoch >
       proto_array.checkpoints(root).get().voting_source.epoch
 
@@ -861,7 +861,7 @@ suite "Attestation pool electra processing" & preset():
       dag, pool, verifier, quarantine, cache,
       validator_changes = validator_changes)
 
-    check proto_array.checkpoints(root).get().unrealized == unrealized
+    check proto_array.checkpoints(root).get().unrealized_justified == unrealized
 
   test "Working with electra aggregates" & preset():
     let
