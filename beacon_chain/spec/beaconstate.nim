@@ -8,7 +8,7 @@
 {.push raises: [], gcsafe.}
 
 import
-  stew/assign2,
+  stew/[assign2, staticfor],
   json_serialization/std/sets,
   chronicles,
   ./[eth2_merkleization, forks, signatures, validator],
@@ -246,6 +246,17 @@ func initiate_validator_exit*(
 
   ok(ExitQueueInfo(
     exit_queue_epoch: exit_queue_epoch, exit_queue_churn: exit_queue_churn))
+
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/beacon-chain.md#new-initiate_builder_exit
+func initiate_builder_exit*(
+    cfg: RuntimeConfig,
+    state: var gloas.BeaconState, builder_index: BuilderIndex) =
+  ## Initiate the exit of the builder with index ``index``.
+  let builder = addr state.builders.mitem(builder_index)
+  if builder.withdrawable_epoch != FAR_FUTURE_EPOCH:
+    return
+  builder.withdrawable_epoch =
+    get_current_epoch(state) + cfg.MIN_BUILDER_WITHDRAWABILITY_DELAY
 
 func get_total_active_balance*(state: ForkyBeaconState, cache: var StateCache): Gwei
 
@@ -1757,6 +1768,14 @@ func convert_builder_index_to_validator_index(builder_index: BuilderIndex):
     uint64 =
   builder_index or BUILDER_INDEX_FLAG
 
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/beacon-chain.md#new-convert_validator_index_to_builder_index
+func convert_validator_index_to_builder_index*(validator_index: uint64): BuilderIndex =
+  validator_index and not BUILDER_INDEX_FLAG
+
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/beacon-chain.md#new-is_builder_index
+func is_builder_index*(validator_index: uint64): bool =
+  (validator_index and BUILDER_INDEX_FLAG) != 0
+
 # https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.2/specs/gloas/beacon-chain.md#new-get_builder_withdrawals
 func get_builder_withdrawals(
     state: gloas.BeaconState, withdrawal_index: WithdrawalIndex,
@@ -2272,6 +2291,70 @@ func onboard_builders_from_pending_deposits*(
   state.pending_deposits =
     typeof(state.pending_deposits).init(pending_deposits)
 
+# {.closure.} prevents stack overflow from inline expansion.
+# See: https://github.com/nim-lang/Nim/issues/25287
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/beacon-chain.md#new-compute_ptc
+iterator compute_ptc*(state: gloas.BeaconState, slot: Slot, cache: var StateCache):
+    ValidatorIndex {.closure.} =
+  ## Get the payload timeliness committee for the given ``slot``.
+  let epoch = slot.epoch()
+  var buffer {.noinit.}: array[40, byte]
+  buffer[0..31] = get_seed(state, epoch, DOMAIN_PTC_ATTESTER).data
+  buffer[32..39] = uint_to_bytes(distinctBase(slot))
+  let seed = eth2digest(buffer)
+
+  var indices = newSeqOfCap[ValidatorIndex](PTC_SIZE)
+
+  # Concatenate all committees for this slot in order
+  let committees_per_slot = get_committee_count_per_slot(state, epoch, cache)
+  for committee_index in get_committee_indices(committees_per_slot):
+    let committee = get_beacon_committee(state, slot, committee_index, cache)
+    indices.add(committee)
+
+  for candidate_index in compute_balance_weighted_selection(
+      state, indices, seed, size=PTC_SIZE, shuffle_indices=false):
+    yield candidate_index
+
+# {.closure.} prevents stack overflow from inline expansion.
+# See: https://github.com/nim-lang/Nim/issues/25287
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/beacon-chain.md#new-get_ptc
+iterator get_ptc*(state: gloas.BeaconState, slot: Slot):
+    ValidatorIndex {.closure.} =
+  ## Get the payload timeliness committee for the given ``slot``
+  let
+    epoch = slot.epoch()
+    state_epoch = get_current_epoch(state)
+    slot_in_epoch = slot mod SLOTS_PER_EPOCH
+
+  if epoch < state_epoch and epoch + 1 != state_epoch:
+    return
+  if epoch >= state_epoch and epoch > state_epoch + MIN_SEED_LOOKAHEAD:
+    return
+
+  let index =
+    (epoch + 1 - state_epoch).Epoch.start_slot.uint64 + slot_in_epoch
+
+  for idx in state.ptc_window[index]:
+    yield ValidatorIndex(idx)
+
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/fork.md#new-initialize_ptc_window
+func initialize_ptc_window(
+    state: var gloas.BeaconState, cache: var StateCache) =
+  ## Return the cached PTC window starting from the current epoch.
+  ## Used to initialize the ``ptc_window`` field in the beacon state
+  ## at genesis and after forks.
+  let current_epoch = state.get_current_epoch()
+  staticFor epoch_offset, 0 .. MIN_SEED_LOOKAHEAD.int:
+    let epoch = current_epoch + epoch_offset
+    const base_index = (1 + epoch_offset) * SLOTS_PER_EPOCH
+    for slot_offset in 0'u64 ..< SLOTS_PER_EPOCH:
+      let slot = epoch.start_slot() + slot_offset
+      clearCaches(state.ptc_window, (base_index + slot_offset).Limit)
+      var i = 0
+      for idx in compute_ptc(state, slot, cache):
+        state.ptc_window.data[base_index + slot_offset][i] = uint64(idx)
+        inc i
+
 # upgrade_to_altair
 func upgrade_to_next*(cfg: RuntimeConfig, pre: phase0.BeaconState, _: var StateCache):
     altair.BeaconState =
@@ -2773,10 +2856,11 @@ func upgrade_to_next*(
     proposer_lookahead: initialize_proposer_lookahead(pre, cache)
   )
 
-# https://github.com/ethereum/consensus-specs/blob/v1.6.1/specs/gloas/fork.md#upgrading-the-state
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/fork.md#upgrading-the-state
 # upgrade_to_gloas
 func upgrade_to_next*(
-    cfg: RuntimeConfig, pre: fulu.BeaconState, _: var StateCache): gloas.BeaconState =
+    cfg: RuntimeConfig, pre: fulu.BeaconState, cache: var StateCache):
+    gloas.BeaconState =
   let epoch = get_current_epoch(pre)
 
   const full_execution_payload_availability = block:
@@ -2860,7 +2944,7 @@ func upgrade_to_next*(
     latest_block_hash: pre.latest_execution_payload_header.block_hash
   )
   onboard_builders_from_pending_deposits(cfg, post)
-
+  initialize_ptc_window(post, cache)
   # result = post
 
 func latest_block_root*(state: ForkyBeaconState, state_root: Eth2Digest):
@@ -2996,41 +3080,16 @@ func can_advance_slots*(
     state: ForkedHashedBeaconState, block_root: Eth2Digest, target_slot: Slot): bool =
   withState(state): forkyState.can_advance_slots(block_root, target_slot)
 
-# {.closure.} prevents stack overflow from inline expansion.
-# See: https://github.com/nim-lang/Nim/issues/25287
-# https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.6/specs/gloas/beacon-chain.md#new-get_ptc
-iterator get_ptc*(state: gloas.BeaconState, slot: Slot, cache: var StateCache):
-    ValidatorIndex {.closure.} =
-  ## Get the payload timeliness committee for the given ``slot``
-  let epoch = slot.epoch()
-  var buffer {.noinit.}: array[40, byte]
-  buffer[0..31] = get_seed(state, epoch, DOMAIN_PTC_ATTESTER).data
-  buffer[32..39] = uint_to_bytes(slot.uint64)
-  let seed = eth2digest(buffer)
-
-  var indices = newSeqOfCap[ValidatorIndex](PTC_SIZE)
-
-  # Concatenate all committees for this slot in order
-  let committees_per_slot = get_committee_count_per_slot(state, epoch, cache)
-  for committee_index in get_committee_indices(committees_per_slot):
-    let committee = get_beacon_committee(state, slot, committee_index, cache)
-    indices.add(committee)
-
-  for candidate_index in compute_balance_weighted_selection(
-      state, indices, seed, size=PTC_SIZE, shuffle_indices=false):
-    yield candidate_index
-
-# https://github.com/ethereum/consensus-specs/blob/v1.6.0-alpha.6/specs/gloas/beacon-chain.md#new-get_indexed_payload_attestation
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/beacon-chain.md#new-get_indexed_payload_attestation
 func get_indexed_payload_attestation*(
     state: gloas.BeaconState, slot: Slot,
-    payload_attestation: PayloadAttestation,
-    cache: var StateCache): IndexedPayloadAttestation =
+    payload_attestation: PayloadAttestation): IndexedPayloadAttestation =
   ## Return the indexed payload attestation corresponding to ``payload_attestation``.
   var
     attesting_indices = newSeqOfCap[uint64](PTC_SIZE)
     i = 0
 
-  for index in get_ptc(state, slot, cache):
+  for index in get_ptc(state, slot):
     if payload_attestation.aggregation_bits[i]:
       attesting_indices.add(index.uint64)
     inc i
@@ -3082,8 +3141,8 @@ func is_active_builder*(
   builder.deposit_epoch < state.finalized_checkpoint.epoch and
     builder.withdrawable_epoch == FAR_FUTURE_EPOCH
 
-# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.1/specs/gloas/beacon-chain.md#new-get_pending_balance_to_withdraw_for_builder
-func get_pending_balance_to_withdraw_for_builder(
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.4/specs/gloas/beacon-chain.md#new-get_pending_balance_to_withdraw_for_builder
+func get_pending_balance_to_withdraw_for_builder*(
     state: gloas.BeaconState, builder_index: BuilderIndex): Gwei =
   var sum: Gwei
   for withdrawal in state.builder_pending_withdrawals:
