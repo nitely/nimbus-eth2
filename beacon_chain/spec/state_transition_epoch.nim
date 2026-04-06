@@ -176,11 +176,11 @@ func get_unslashed_participating_balances*(
     state: altair.BeaconState | bellatrix.BeaconState | capella.BeaconState |
            deneb.BeaconState | electra.BeaconState | fulu.BeaconState |
            gloas.BeaconState | heze.BeaconState):
-    UnslashedParticipatingBalances =
+    ParticipatingBalances =
   let
     previous_epoch = get_previous_epoch(state)
     current_epoch = get_current_epoch(state)
-  var res: UnslashedParticipatingBalances
+  var res: ParticipatingBalances
 
   for validator_index in 0'u64 ..< state.validators.lenu64:
     let
@@ -423,7 +423,7 @@ proc process_justification_and_finalization*(
     state: var (altair.BeaconState | bellatrix.BeaconState |
                 capella.BeaconState | deneb.BeaconState | electra.BeaconState |
                 fulu.BeaconState | gloas.BeaconState | heze.BeaconState),
-    balances: UnslashedParticipatingBalances,
+    balances: ParticipatingBalances,
     flags: UpdateFlags = {}) =
   # Initial FFG checkpoint values have a `0x00` stub for `root`.
   # Skip FFG updates in the first two epochs to avoid corner cases that might
@@ -445,22 +445,22 @@ proc process_justification_and_finalization*(
 proc compute_unrealized_finality*(
     state: altair.BeaconState | bellatrix.BeaconState | capella.BeaconState |
            deneb.BeaconState | electra.BeaconState | fulu.BeaconState |
-           gloas.BeaconState): FinalityCheckpoints =
-  if get_current_epoch(state) <= GENESIS_EPOCH + 1:
-    return FinalityCheckpoints(
-      justified: state.current_justified_checkpoint,
-      finalized: state.finalized_checkpoint)
-
+           gloas.BeaconState): (FinalityCheckpoints, ParticipatingBalances) =
   let balances = get_unslashed_participating_balances(state)
+
+  if get_current_epoch(state) <= GENESIS_EPOCH + 1:
+    return (FinalityCheckpoints(
+      justified: state.current_justified_checkpoint,
+      finalized: state.finalized_checkpoint), balances)
 
   var finalityState = state.toFinalityState()
   let jfRes = weigh_justification_and_finalization(
     finalityState, balances.current_epoch,
     balances.previous_epoch[TIMELY_TARGET_FLAG_INDEX],
     balances.current_epoch_TIMELY_TARGET)
-  FinalityCheckpoints(
+  (FinalityCheckpoints(
     justified: jfRes.current_justified_checkpoint,
-    finalized: jfRes.finalized_checkpoint)
+    finalized: jfRes.finalized_checkpoint), balances)
 
 # https://github.com/ethereum/consensus-specs/blob/v1.5.0-beta.4/specs/phase0/beacon-chain.md#helpers
 func get_base_reward_sqrt*(state: phase0.BeaconState, index: ValidatorIndex,
@@ -1452,13 +1452,29 @@ proc process_epoch*(
 
   ok()
 
-func init*(
+proc init*(
     info: var altair.EpochInfo,
     state: altair.BeaconState | bellatrix.BeaconState | capella.BeaconState |
            deneb.BeaconState | electra.BeaconState | fulu.BeaconState |
-           gloas.BeaconState | heze.BeaconState) =
+           gloas.BeaconState | heze.BeaconState,
+    cache = default(StateCache)) =
   # init participation, overwriting the full structure
-  info.balances = get_unslashed_participating_balances(state)
+  info.balances =
+    if cache.participating.isSome:
+      let participating = cache.participating.unsafeGet
+      if participating.slot == state.latest_block_header.slot and
+          participating.slot.epoch == get_current_epoch(state):
+        debugGloasComment "remove + proc -> func once this got enough maturity"
+        let expected_balances = get_unslashed_participating_balances(state)
+        if participating.balances != expected_balances:
+          warn "Participating balances cache mismatch - report bug",
+            slot = state.slot, participating, expected_balances
+          incInternalErrors()
+        expected_balances  # participating.balances
+      else:
+        get_unslashed_participating_balances(state)
+    else:
+      get_unslashed_participating_balances(state)
   info.validators.setLen(state.validators.len())
 
   let previous_epoch = get_previous_epoch(state)
@@ -1467,11 +1483,9 @@ func init*(
     if is_eligible_validator(state.validators[index], previous_epoch):
       flags.incl ParticipationFlag.eligible
 
-    info.validators[index] = ParticipationInfo(
-      flags: flags
-    )
+    info.validators[index] = ParticipationInfo(flags: flags)
 
-func init*(
+proc init*(
     T: type altair.EpochInfo,
     state: altair.BeaconState | bellatrix.BeaconState | capella.BeaconState |
            deneb.BeaconState | electra.BeaconState | fulu.BeaconState |
@@ -1485,7 +1499,7 @@ proc process_epoch*(
     flags: UpdateFlags, cache: var StateCache, info: var altair.EpochInfo):
     Result[void, cstring] =
   let epoch = get_current_epoch(state)
-  info.init(state)
+  info.init(state, cache)
 
   process_justification_and_finalization(state, info.balances, flags)
 
@@ -1520,7 +1534,7 @@ proc process_epoch*(
     flags: UpdateFlags, cache: var StateCache, info: var altair.EpochInfo):
     Result[void, cstring] =
   let epoch = get_current_epoch(state)
-  info.init(state)
+  info.init(state, cache)
 
   process_justification_and_finalization(state, info.balances, flags)
 
@@ -1555,7 +1569,7 @@ proc process_epoch*(
     flags: UpdateFlags, cache: var StateCache, info: var altair.EpochInfo):
     Result[void, cstring] =
   let epoch = get_current_epoch(state)
-  info.init(state)
+  info.init(state, cache)
 
   process_justification_and_finalization(state, info.balances, flags)
 
@@ -1592,7 +1606,7 @@ proc process_epoch*(
     flags: UpdateFlags, cache: var StateCache, info: var altair.EpochInfo):
     Result[void, cstring] =
   let epoch = get_current_epoch(state)
-  info.init(state)
+  info.init(state, cache)
 
   process_justification_and_finalization(state, info.balances, flags)
 
@@ -1630,7 +1644,7 @@ proc process_epoch*(
     flags: UpdateFlags, cache: var StateCache, info: var altair.EpochInfo):
     Result[void, cstring] =
   let epoch = get_current_epoch(state)
-  info.init(state)
+  info.init(state, cache)
 
   process_justification_and_finalization(state, info.balances, flags)
 
