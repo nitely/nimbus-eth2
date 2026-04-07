@@ -116,7 +116,10 @@ func cacheRecentSyncAggregate(
 
 func lightClientHeader(
     blck: ForkyTrustedSignedBeaconBlock): ForkedLightClientHeader =
-  when kind(typeof(blck)) == ConsensusFork.Gloas:
+  when kind(typeof(blck)) == ConsensusFork.Heze:
+    debugHezeComment "..."
+    default(ForkedLightClientHeader)
+  elif kind(typeof(blck)) == ConsensusFork.Gloas:
     debugGloasComment "..."
     default(ForkedLightClientHeader)
   else:
@@ -252,6 +255,8 @@ proc initLightClientBootstrapForPeriod(
       withStateAndBlck(tmpState[], bdata):
         when consensusFork == ConsensusFork.Gloas:
           debugGloasComment "..."
+        elif consensusFork == ConsensusFork.Heze:
+          debugHezeComment "..."
         elif consensusFork >= ConsensusFork.Altair:
           const lcDataFork = lcDataForkAtConsensusFork(consensusFork)
           if not dag.lcDataStore.db.hasSyncCommittee(period):
@@ -427,7 +432,7 @@ proc initLightClientUpdateForPeriod(
       return err()
     withBlck(bdata):
       debugGloasComment ""
-      when consensusFork != ConsensusFork.Gloas:
+      when consensusFork notin [ConsensusFork.Gloas, ConsensusFork.Heze]:
         withForkyUpdate(update):
           when lcDataFork > LightClientDataFork.None:
             when lcDataFork >= lcDataForkAtConsensusFork(consensusFork):
@@ -730,7 +735,8 @@ proc createLightClientBootstrap(
       dag.lcDataStore.db.putSyncCommittee(period, syncCommittee)
   withBlck(bdata):
     debugGloasComment ""
-    when consensusFork >= ConsensusFork.Altair and consensusFork != ConsensusFork.Gloas:
+    when consensusFork >= ConsensusFork.Altair and
+         consensusFork notin [ConsensusFork.Gloas, ConsensusFork.Heze]:
       const lcDataFork = lcDataForkAtConsensusFork(consensusFork)
       dag.lcDataStore.db.putHeader(
         forkyBlck.toLightClientHeader(lcDataFork))
@@ -1111,7 +1117,8 @@ proc getLightClientBootstrap*(
     return default(ForkedLightClientBootstrap)
   withBlck(bdata):
     debugGloasComment ""
-    when consensusFork >= ConsensusFork.Altair and consensusFork != ConsensusFork.Gloas:
+    when consensusFork >= ConsensusFork.Altair and
+         consensusFork notin [ConsensusFork.Gloas, ConsensusFork.Heze]:
       const lcDataFork = lcDataForkAtConsensusFork(consensusFork)
       let
         header = forkyBlck.toLightClientHeader(lcDataFork)
