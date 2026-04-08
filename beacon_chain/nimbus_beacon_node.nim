@@ -2312,7 +2312,7 @@ proc installMessageValidators(node: BeaconNode) =
         when consensusFork >= ConsensusFork.Gloas:
           node.network.addValidator(
             getExecutionPayloadBidTopic(digest), proc (
-              signedBid: SignedExecutionPayloadBid,
+              signedBid: gloas.SignedExecutionPayloadBid,
               src: PeerId
             ): ValidationResult =
               toValidationResult(
