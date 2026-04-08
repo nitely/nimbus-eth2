@@ -131,8 +131,7 @@ let
     for consensusFork in ConsensusFork:
       res[consensusFork] = cfg.getTestStates(consensusFork)
     res
-debugHezeComment "..."
-doAssert testStates.toOpenArray(0, testStates.len - 2).allIt(it.len > 8)
+doAssert testStates.allIt(it.len > 8)
 
 suite "Beacon chain DB" & preset():
   test "empty database" & preset():
@@ -568,15 +567,15 @@ suite "Beacon chain DB" & preset():
         message: BeaconBlockHeader(slot: Slot(0)))
       blockHeader1 = SignedBeaconBlockHeader(
         message: BeaconBlockHeader(slot: Slot(1)))
-
-    let
+    
+    let 
       blockRoot0 = hash_tree_root(blockHeader0.message)
       blockRoot1 = hash_tree_root(blockHeader1.message)
 
       dataColumnSidecar0 = gloas.DataColumnSidecar(index: 3, beacon_block_root: blockRoot0)
       dataColumnSidecar1 = gloas.DataColumnSidecar(index: 2, beacon_block_root: blockRoot0)
       dataColumnSidecar2 = gloas.DataColumnSidecar(index: 2, beacon_block_root: blockRoot1)
-
+      
       db = cfg.makeTestDB(SLOTS_PER_EPOCH)
 
     var
@@ -698,7 +697,7 @@ suite "Beacon chain DB" & preset():
         message: ExecutionPayloadEnvelope(beacon_block_root: blockRoot1))
 
       db = cfg.makeTestDB(SLOTS_PER_EPOCH)
-
+    
     var data: seq[byte]
 
     check:
@@ -719,7 +718,7 @@ suite "Beacon chain DB" & preset():
       not db.getExecutionPayloadEnvelope(blockRoot1).isSome()
       db.getExecutionPayloadEnvelopeSZ(blockRoot0, data)
       not db.getExecutionPayloadEnvelopeSZ(blockRoot1, data)
-
+    
     db.putExecutionPayloadEnvelope(envelope1)
 
     check:
@@ -749,7 +748,7 @@ suite "Beacon chain DB" & preset():
       not db.getExecutionPayloadEnvelope(blockRoot1).isSome()
       not db.getExecutionPayloadEnvelopeSZ(blockRoot0, data)
       not db.getExecutionPayloadEnvelopeSZ(blockRoot1, data)
-
+    
     db.close()
 
 suite "Quarantine" & preset():

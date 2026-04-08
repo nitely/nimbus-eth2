@@ -5,7 +5,7 @@
 #   * Apache v2 license (license terms in the root directory or at https://www.apache.org/licenses/LICENSE-2.0).
 # at your option. This file may not be copied, modified, or distributed except according to those terms.
 
-{.push raises: [], gcsafe.}
+{.push raises: [].}
 
 import
   std/[typetraits, tables],
@@ -538,13 +538,12 @@ proc new*(T: type BeaconChainDB,
       kvStore db.openKvStore("capella_blocks").expectDb(),
       kvStore db.openKvStore("deneb_blocks").expectDb(),
       kvStore db.openKvStore("electra_blocks").expectDb(),
-      kvStore db.openKvStore("fulu_blocks").expectDb(),
-      if cfg.GLOAS_FORK_EPOCH != FAR_FUTURE_EPOCH:
-        kvStore db.openKvStore("gloas_blocks").expectDb()
+      if cfg.FULU_FORK_EPOCH != FAR_FUTURE_EPOCH:
+        kvStore db.openKvStore("fulu_blocks").expectDb()
       else:
         nil,
-      if cfg.HEZE_FORK_EPOCH != FAR_FUTURE_EPOCH:
-        kvStore db.openKvStore("321cd149fc98434fa315ce9afd563ad1").expectDb()
+      if cfg.GLOAS_FORK_EPOCH != FAR_FUTURE_EPOCH:
+        kvStore db.openKvStore("gloas_blocks").expectDb()
       else:
         nil
     ]
@@ -558,13 +557,12 @@ proc new*(T: type BeaconChainDB,
       kvStore db.openKvStore("capella_state_no_validator_pubkeys").expectDb(),
       kvStore db.openKvStore("deneb_state_no_validator_pubkeys").expectDb(),
       kvStore db.openKvStore("electra_state_no_validator_pubkeys").expectDb(),
-      kvStore db.openKvStore("fulu_state_no_validator_pubkeys").expectDb(),
-      if cfg.GLOAS_FORK_EPOCH != FAR_FUTURE_EPOCH:
-        kvStore db.openKvStore("gloas_state_no_validator_pubkeys").expectDb()
+      if cfg.FULU_FORK_EPOCH != FAR_FUTURE_EPOCH:
+        kvStore db.openKvStore("fulu_state_no_validator_pubkeys").expectDb()
       else:
         nil,
-      if cfg.HEZE_FORK_EPOCH != FAR_FUTURE_EPOCH:
-        kvStore db.openKvStore("92859b2e460944169bcca68d8a620069").expectDb()
+      if cfg.GLOAS_FORK_EPOCH != FAR_FUTURE_EPOCH:
+        kvStore db.openKvStore("gloas_state_no_validator_pubkeys").expectDb()
       else:
         nil
     ]
@@ -611,11 +609,12 @@ proc new*(T: type BeaconChainDB,
     nil, # Capella
     nil, # Deneb
     nil, # Electra
-    kvStore db.openKvStore("fulu_columns").expectDb(),
+    if cfg.FULU_FORK_EPOCH != FAR_FUTURE_EPOCH:
+      kvStore db.openKvStore("fulu_columns").expectDb()
+    else: nil,
     if cfg.GLOAS_FORK_EPOCH != FAR_FUTURE_EPOCH:
       kvStore db.openKvStore("gloas_columns").expectDb()
-    else: nil,
-    nil  # Heze
+    else: nil
   ]
 
   var envelopes: KvStoreRef
@@ -917,9 +916,7 @@ proc updateImmutableValidators*(
     db.immutableValidators.add immutableValidator
 
 template BeaconStateNoImmutableValidators(kind: static ConsensusFork): auto =
-  when kind == ConsensusFork.Heze:
-    typedesc[HezeBeaconStateNoImmutableValidators]
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     typedesc[GloasBeaconStateNoImmutableValidators]
   elif kind == ConsensusFork.Fulu:
     typedesc[FuluBeaconStateNoImmutableValidators]

@@ -5,7 +5,7 @@
 #   * Apache v2 license (license terms in the root directory or at https://www.apache.org/licenses/LICENSE-2.0).
 # at your option. This file may not be copied, modified, or distributed except according to those terms.
 
-{.push raises: [], gcsafe.}
+{.push raises: [].}
 
 import std/[tables, os, strutils]
 import serialization, json_serialization,
@@ -261,9 +261,6 @@ proc installApiHandlers*(node: SigningNodeRef) =
             (GeneralizedIndex(801), request.beaconBlockHeader.data)
           of ConsensusFork.Gloas:
             debugGloasComment "do not this"
-            return errorResponse(Http400, BlockIncorrectFork)
-          of ConsensusFork.Heze:
-            debugHezeComment "do not this"
             return errorResponse(Http400, BlockIncorrectFork)
 
         if request.proofs.isNone() or len(request.proofs.get()) == 0:

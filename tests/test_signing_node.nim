@@ -101,9 +101,6 @@ proc getBlock(
     of ConsensusFork.Gloas:
       debugGloasComment "gloas test signing node getblock"
       raiseAssert "gloas unsupported"
-    of ConsensusFork.Heze:
-      debugGloasComment "heze test signing node getblock"
-      raiseAssert "heze unsupported"
   except ValueError:
     # https://github.com/nim-lang/Nim/pull/23356
     raiseAssert "Arguments match the format string"
@@ -127,10 +124,6 @@ func init(t: typedesc[Web3SignerForkedBeaconBlock],
     Web3SignerForkedBeaconBlock(
       kind: ConsensusFork.Gloas,
       data: forked.gloasData.toBeaconBlockHeader)
-  of ConsensusFork.Heze:
-    Web3SignerForkedBeaconBlock(
-      kind: ConsensusFork.Heze,
-      data: forked.hezeData.toBeaconBlockHeader)
 
 proc createKeystore(dataDir, pubkey,
                     store, password: string): Result[void, string] =

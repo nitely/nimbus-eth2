@@ -327,8 +327,6 @@ func getVanityLogs(stdoutKind: StdoutLogKind): VanityLogs =
 func getVanityMascot(consensusFork: ConsensusFork): string =
   debugGloasComment "don't know vanity mascot yet"
   case consensusFork
-  of ConsensusFork.Heze:
-    "?"
   of ConsensusFork.Gloas:
     "?"
   of ConsensusFork.Fulu:
@@ -616,12 +614,9 @@ proc initFullNode(
                          blobs: Opt[BlobSidecars], maybeFinalized: bool):
         Future[Result[void, VerifierError]] {.async: (raises: [CancelledError], raw: true).} =
       withBlck(signedBlock):
-        when consensusFork in ConsensusFork.Fulu .. ConsensusFork.Heze:
+        when consensusFork in ConsensusFork.Fulu .. ConsensusFork.Gloas:
           # TODO document why there are no columns here
-          when consensusFork == ConsensusFork.Heze:
-            # Disable sidecars processing at block time.
-            const sidecarsOpt = noSidecars
-          elif consensusFork == ConsensusFork.Gloas:
+          when consensusFork == ConsensusFork.Gloas:
             # Disable sidecars processing at block time.
             const sidecarsOpt = noSidecars
           else:
@@ -706,10 +701,7 @@ proc initFullNode(
                 bid = shortLog(blockRef.bid)
               return err(VerifierError.Invalid)
             withBlck(forkedBlock):
-              when consensusFork == ConsensusFork.Heze:
-                debugHezeComment "..."
-                return err(VerifierError.Duplicate)
-              elif consensusFork == ConsensusFork.Gloas:
+              when consensusFork >= ConsensusFork.Gloas:
                 forkyBlck.asSigned()
               else:
                 # Incorrect fork which shouldn't be happening.
@@ -1655,7 +1647,7 @@ proc updateGossipStatus(node: BeaconNode, slot: Slot) {.async.} =
     TOPIC_SUBSCRIBE_THRESHOLD_SLOTS = 64
     HYSTERESIS_BUFFER = 16
 
-  static: doAssert high(ConsensusFork) == ConsensusFork.Heze
+  static: doAssert high(ConsensusFork) == ConsensusFork.Gloas
 
   let
     head = node.dag.head
@@ -1728,8 +1720,7 @@ proc updateGossipStatus(node: BeaconNode, slot: Slot) {.async.} =
     removeDenebMessageHandlers,
     removeElectraMessageHandlers,
     removeFuluMessageHandlers,
-    removeGloasMessageHandlers,
-    removeGloasMessageHandlers  # heze (gloas handlers)
+    removeGloasMessageHandlers
   ]
 
   for gossipEpoch in oldGossipEpochs:
@@ -1745,8 +1736,7 @@ proc updateGossipStatus(node: BeaconNode, slot: Slot) {.async.} =
     addDenebMessageHandlers,
     addElectraMessageHandlers,
     addCapellaMessageHandlers, # no blobs; updateDataColumnSidecarHandlers for rest
-    addGloasMessageHandlers,
-    addGloasMessageHandlers  # heze (gloas handlers)
+    addGloasMessageHandlers
   ]
 
   for gossipEpoch in newGossipEpochs:
@@ -1783,7 +1773,7 @@ proc pruneBlobs(node: BeaconNode, slot: Slot) =
       let blck = node.dag.getForkedBlock(blocks[int(i)]).valueOr: continue
       withBlck(blck):
         debugGloasComment " "
-        when typeof(forkyBlck).kind < ConsensusFork.Deneb or typeof(forkyBlck).kind in [ConsensusFork.Gloas, ConsensusFork.Heze]: continue
+        when typeof(forkyBlck).kind < ConsensusFork.Deneb or typeof(forkyBlck).kind == ConsensusFork.Gloas: continue
         else:
           for j in 0..len(forkyBlck.message.body.blob_kzg_commitments) - 1:
             if node.db.delBlobSidecar(blocks[int(i)].root, BlobIndex(j)):

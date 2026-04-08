@@ -315,8 +315,7 @@ func getMaxBlobsPerBlock(cfg: RuntimeConfig, slot: Slot): uint64 =
 
 # https://github.com/ethereum/consensus-specs/blob/v1.6.1/specs/gloas/p2p-interface.md#beacon_block
 template validateBeaconBlockBellatrix(
-    _: phase0.SignedBeaconBlock | altair.SignedBeaconBlock |
-       gloas.SignedBeaconBlock | heze.SignedBeaconBlock,
+    _: phase0.SignedBeaconBlock | altair.SignedBeaconBlock | gloas.SignedBeaconBlock,
     _: BlockRef): untyped =
   discard
 
@@ -379,8 +378,7 @@ template validateBeaconBlockDeneb(
     _: ChainDAGRef,
     _:
       phase0.SignedBeaconBlock | altair.SignedBeaconBlock |
-      bellatrix.SignedBeaconBlock | capella.SignedBeaconBlock |
-      gloas.SignedBeaconBlock | heze.SignedBeaconBlock,
+      bellatrix.SignedBeaconBlock | capella.SignedBeaconBlock | gloas.SignedBeaconBlock,
     _: BeaconTime): untyped =
   discard
 
@@ -407,8 +405,7 @@ template validateBeaconBlockGloas(
       phase0.SignedBeaconBlock | altair.SignedBeaconBlock |
       bellatrix.SignedBeaconBlock | capella.SignedBeaconBlock |
       deneb.SignedBeaconBlock | electra.SignedBeaconBlock |
-      fulu.SignedBeaconBlock | heze.SignedBeaconBlock): untyped =
-  debugHezeComment "this effectively disables gossip validation for Heze blocks currently"
+      fulu.SignedBeaconBlock): untyped =
   discard
 
 # https://github.com/ethereum/consensus-specs/blob/v1.6.1/specs/gloas/p2p-interface.md#beacon_block
@@ -794,11 +791,8 @@ proc validateDataColumnSidecar*(
             root = shortLog(blockRoot)
           return errIgnore("DataColumnSidecar: block not yet seen")
       withBlck(forkedBlock):
-        when consensusFork == ConsensusFork.Gloas:
+        when consensusFork >= ConsensusFork.Gloas:
           forkyBlck
-        elif consensusFork == ConsensusFork.Heze:
-          debugHezeComment "..."
-          return errIgnore("DataColumnSidecar: block in incorrect fork")
         else:
           return errIgnore("DataColumnSidecar: block in incorrect fork")
 
@@ -1082,10 +1076,7 @@ proc validateExecutionPayload*(
           root: envelope.beacon_block_root, slot: envelope.slot)).valueOr:
         return dag.checkedReject("ExecutionPayload: invalid block")
       withBlck(forkedBlock):
-        when consensusFork == ConsensusFork.Heze:
-          debugHezeComment "..."
-          return dag.checkedReject("ExecutionPayload: invalid fork")
-        elif consensusFork == ConsensusFork.Gloas:
+        when consensusFork >= ConsensusFork.Gloas:
           forkyBlck.asSigned().message
         else:
           return dag.checkedReject("ExecutionPayload: invalid fork")

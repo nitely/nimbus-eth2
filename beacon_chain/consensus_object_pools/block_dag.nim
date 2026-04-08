@@ -99,8 +99,7 @@ func init*(
 
 func init*(
     T: type BlockRef, root: Eth2Digest, optimisticStatus: OptimisticStatus,
-    blck: gloas.SomeBeaconBlock | gloas.TrustedBeaconBlock |
-          heze.SomeBeaconBlock | heze.TrustedBeaconBlock): BlockRef =
+    blck: gloas.SomeBeaconBlock | gloas.TrustedBeaconBlock): BlockRef =
   template bid(): auto = blck.body.signed_execution_payload_bid
   BlockRef.init(
     root,

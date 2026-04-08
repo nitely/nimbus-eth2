@@ -57,7 +57,6 @@ type
     Electra = "electra"
     Fulu = "fulu"
     Gloas = "gloas"
-    Heze = "heze"
 
   ForkyBeaconState* =
     phase0.BeaconState |
@@ -91,7 +90,6 @@ type
     of ConsensusFork.Electra:   electraData*:   electra.HashedBeaconState
     of ConsensusFork.Fulu:      fuluData*:      fulu.HashedBeaconState
     of ConsensusFork.Gloas:     gloasData*:     gloas.HashedBeaconState
-    of ConsensusFork.Heze:      hezeData*:      heze.HashedBeaconState
 
   ForkyExecutionPayload* =
     bellatrix.ExecutionPayload |
@@ -246,7 +244,6 @@ type
     of ConsensusFork.Electra:   electraData*:   electra.Attestation
     of ConsensusFork.Fulu:      fuluData*:      electra.Attestation
     of ConsensusFork.Gloas:     gloasData*:     electra.Attestation
-    of ConsensusFork.Heze:      hezeData*:      electra.Attestation
 
   ForkedAggregateAndProof* = object
     case kind*: ConsensusFork
@@ -258,7 +255,6 @@ type
     of ConsensusFork.Electra:   electraData*:   electra.AggregateAndProof
     of ConsensusFork.Fulu:      fuluData*:      electra.AggregateAndProof
     of ConsensusFork.Gloas:     gloasData*:     electra.AggregateAndProof
-    of ConsensusFork.Heze:      hezeData*:      electra.AggregateAndProof
 
   ForkedBeaconBlock* = object
     case kind*: ConsensusFork
@@ -270,7 +266,6 @@ type
     of ConsensusFork.Electra:   electraData*:   electra.BeaconBlock
     of ConsensusFork.Fulu:      fuluData*:      fulu.BeaconBlock
     of ConsensusFork.Gloas:     gloasData*:     gloas.BeaconBlock
-    of ConsensusFork.Heze:      hezeData*:      heze.BeaconBlock
 
   ForkedMaybeBlindedBeaconBlock* = object
     case kind*: ConsensusFork
@@ -290,8 +285,6 @@ type
       fuluData*: fulu_mev.MaybeBlindedBeaconBlock
     of ConsensusFork.Gloas:
       gloasData*: gloas.BlockContents
-    of ConsensusFork.Heze:
-      hezeData*: heze.BlockContents
     consensusValue*: Opt[UInt256]
     executionValue*: Opt[UInt256]
 
@@ -321,7 +314,6 @@ type
     of ConsensusFork.Electra:   electraData*:   electra.SignedBeaconBlock
     of ConsensusFork.Fulu:      fuluData*:      fulu.SignedBeaconBlock
     of ConsensusFork.Gloas:     gloasData*:     gloas.SignedBeaconBlock
-    of ConsensusFork.Heze:      hezeData*:      heze.SignedBeaconBlock
 
   ForkySignedBlindedBeaconBlock* =
     phase0.SignedBeaconBlock |
@@ -342,7 +334,6 @@ type
     of ConsensusFork.Electra:   electraData*:   electra_mev.SignedBlindedBeaconBlock
     of ConsensusFork.Fulu:      fuluData*:      fulu_mev.SignedBlindedBeaconBlock
     of ConsensusFork.Gloas:     gloasData*:     fulu_mev.SignedBlindedBeaconBlock
-    of ConsensusFork.Heze:      hezeData*:      fulu_mev.SignedBlindedBeaconBlock
 
   ForkySigVerifiedSignedBeaconBlock* =
     phase0.SigVerifiedSignedBeaconBlock |
@@ -352,8 +343,7 @@ type
     deneb.SigVerifiedSignedBeaconBlock |
     electra.SigVerifiedSignedBeaconBlock |
     fulu.SigVerifiedSignedBeaconBlock |
-    gloas.SigVerifiedSignedBeaconBlock |
-    heze.SigVerifiedSignedBeaconBlock
+    gloas.SigVerifiedSignedBeaconBlock
 
   ForkyTrustedSignedBeaconBlock* =
     phase0.TrustedSignedBeaconBlock |
@@ -376,7 +366,6 @@ type
     of ConsensusFork.Electra:   electraData*:   electra.TrustedSignedBeaconBlock
     of ConsensusFork.Fulu:      fuluData*:      fulu.TrustedSignedBeaconBlock
     of ConsensusFork.Gloas:     gloasData*:     gloas.TrustedSignedBeaconBlock
-    of ConsensusFork.Heze:      hezeData*:      heze.TrustedSignedBeaconBlock
 
   SomeForkySignedBeaconBlock* =
     ForkySignedBeaconBlock |
@@ -544,25 +533,8 @@ template kind*(
       gloas.TrustedSignedBeaconBlock]): ConsensusFork =
   ConsensusFork.Gloas
 
-template kind*(
-    x: typedesc[
-      heze.BeaconState |
-      heze.HashedBeaconState |
-      heze.BeaconBlock |
-      heze.SignedBeaconBlock |
-      heze.SigVerifiedBeaconBlock |
-      heze.TrustedBeaconBlock |
-      heze.BeaconBlockBody |
-      heze.SigVerifiedBeaconBlockBody |
-      heze.TrustedBeaconBlockBody |
-      heze.SigVerifiedSignedBeaconBlock |
-      heze.TrustedSignedBeaconBlock]): ConsensusFork =
-  ConsensusFork.Heze
-
 template BeaconState*(kind: static ConsensusFork): typedesc =
-  when kind == ConsensusFork.Heze:
-    heze.BeaconState
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     gloas.BeaconState
   elif kind == ConsensusFork.Fulu:
     fulu.BeaconState
@@ -582,9 +554,7 @@ template BeaconState*(kind: static ConsensusFork): typedesc =
     {.error: "BeaconState unsupported in " & $kind.}
 
 template BeaconBlock*(kind: static ConsensusFork): typedesc =
-  when kind == ConsensusFork.Heze:
-    heze.BeaconBlock
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     gloas.BeaconBlock
   elif kind == ConsensusFork.Fulu:
     fulu.BeaconBlock
@@ -604,9 +574,7 @@ template BeaconBlock*(kind: static ConsensusFork): typedesc =
     {.error: "BeaconBlock unsupported in " & $kind.}
 
 template BeaconBlockBody*(kind: static ConsensusFork): typedesc =
-  when kind == ConsensusFork.Heze:
-    heze.BeaconBlockBody
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     gloas.BeaconBlockBody
   elif kind == ConsensusFork.Fulu:
     fulu.BeaconBlockBody
@@ -626,9 +594,7 @@ template BeaconBlockBody*(kind: static ConsensusFork): typedesc =
     {.error: "BeaconBlockBody unsupported in " & $kind.}
 
 template SignedBeaconBlock*(kind: static ConsensusFork): typedesc =
-  when kind == ConsensusFork.Heze:
-    heze.SignedBeaconBlock
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     gloas.SignedBeaconBlock
   elif kind == ConsensusFork.Fulu:
     fulu.SignedBeaconBlock
@@ -648,9 +614,7 @@ template SignedBeaconBlock*(kind: static ConsensusFork): typedesc =
     {.error: "SignedBeaconBlock unsupported in " & $kind.}
 
 template TrustedSignedBeaconBlock*(kind: static ConsensusFork): typedesc =
-  when kind == ConsensusFork.Heze:
-    heze.TrustedSignedBeaconBlock
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     gloas.TrustedSignedBeaconBlock
   elif kind == ConsensusFork.Fulu:
     fulu.TrustedSignedBeaconBlock
@@ -680,9 +644,7 @@ template ExecutionPayloadHeader*(kind: static ConsensusFork): typedesc =
     {.error: "ExecutionPayloadHeader unsupported in " & $kind.}
 
 template ExecutionPayloadForSigning*(kind: static ConsensusFork): typedesc =
-  when kind == ConsensusFork.Heze:
-    gloas.ExecutionPayloadForSigning
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     gloas.ExecutionPayloadForSigning
   elif kind == ConsensusFork.Fulu:
     fulu.ExecutionPayloadForSigning
@@ -738,7 +700,7 @@ template SignedBuilderBid*(kind: static ConsensusFork): typedesc =
     {.error: "SignedBuilderBid unsupported in " & $kind.}
 
 template BlobsBundle*(kind: static ConsensusFork): typedesc =
-  when kind in ConsensusFork.Fulu .. ConsensusFork.Heze:
+  when kind in ConsensusFork.Fulu .. ConsensusFork.Gloas:
     fulu.BlobsBundle
   elif kind in ConsensusFork.Deneb .. ConsensusFork.Electra:
     deneb.BlobsBundle
@@ -752,8 +714,7 @@ template Forky*(
 
 template withAll*(
     x: typedesc[ConsensusFork], body: untyped): untyped =
-  debugHezeComment "actually iterate Heze"
-  static: doAssert ConsensusFork.high == ConsensusFork.Heze
+  static: doAssert ConsensusFork.high == ConsensusFork.Gloas
   block:
     const consensusFork {.inject, used.} = ConsensusFork.Gloas
     body
@@ -782,9 +743,6 @@ template withAll*(
 template withConsensusFork*(
     x: ConsensusFork, body: untyped): untyped =
   case x
-  of ConsensusFork.Heze:
-    const consensusFork {.inject, used.} = ConsensusFork.Heze
-    body
   of ConsensusFork.Gloas:
     const consensusFork {.inject, used.} = ConsensusFork.Gloas
     body
@@ -811,9 +769,7 @@ template withConsensusFork*(
     body
 
 template BlockContents*(kind: static ConsensusFork): typedesc =
-  when kind == ConsensusFork.Heze:
-    heze.BlockContents
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     gloas.BlockContents
   elif kind == ConsensusFork.Fulu:
     fulu.BlockContents
@@ -859,8 +815,8 @@ template PayloadAttributes*(
     {.error: "PayloadAttributes unsupported in " & $kind.}
 
 # `eth2_merkleization` cannot import `forks` (circular), so the check is here
-debugHezeComment "actually verify this"
-static: doAssert ConsensusFork.high == ConsensusFork.Heze,
+debugGloasComment "actually verify this"
+static: doAssert ConsensusFork.high == ConsensusFork.Gloas,
   "eth2_merkleization has been checked and `hash_tree_root` is up to date"
 
 # TODO when https://github.com/nim-lang/Nim/issues/21086 fixed, use return type
@@ -897,10 +853,6 @@ func new*(T: type ForkedHashedBeaconState, data: gloas.BeaconState):
     ref ForkedHashedBeaconState =
   (ref T)(kind: ConsensusFork.Gloas, gloasData: gloas.HashedBeaconState(
     data: data, root: hash_tree_root(data)))
-func new*(T: type ForkedHashedBeaconState, data: heze.BeaconState):
-    ref ForkedHashedBeaconState =
-  (ref T)(kind: ConsensusFork.Heze, hezeData: heze.HashedBeaconState(
-    data: data, root: hash_tree_root(data)))
 
 template init*(T: type ForkedBeaconBlock, blck: electra.BeaconBlock): T =
   T(kind: ConsensusFork.Electra, electraData: blck)
@@ -908,8 +860,6 @@ template init*(T: type ForkedBeaconBlock, blck: fulu.BeaconBlock): T =
   T(kind: ConsensusFork.Fulu, fuluData: blck)
 template init*(T: type ForkedBeaconBlock, blck: gloas.BeaconBlock): T =
   T(kind: ConsensusFork.Gloas, gloasData: blck)
-template init*(T: type ForkedBeaconBlock, blck: heze.BeaconBlock): T =
-  T(kind: ConsensusFork.Heze, hezeData: blck)
 
 template init*(T: type ForkedSignedBeaconBlock, blck: phase0.SignedBeaconBlock): T =
   T(kind: ConsensusFork.Phase0, phase0Data: blck)
@@ -927,8 +877,6 @@ template init*(T: type ForkedSignedBeaconBlock, blck: fulu.SignedBeaconBlock): T
   T(kind: ConsensusFork.Fulu, fuluData: blck)
 template init*(T: type ForkedSignedBeaconBlock, blck: gloas.SignedBeaconBlock): T =
   T(kind: ConsensusFork.Gloas, gloasData: blck)
-template init*(T: type ForkedSignedBeaconBlock, blck: heze.SignedBeaconBlock): T =
-  T(kind: ConsensusFork.Heze, hezeData: blck)
 
 template init*(T: type ForkedSignedBlindedBeaconBlock,
                blck: electra_mev.BlindedBeaconBlock, blockRoot: Eth2Digest,
@@ -960,16 +908,12 @@ template init*(T: type ForkedTrustedSignedBeaconBlock, blck: fulu.TrustedSignedB
   T(kind: ConsensusFork.Fulu, fuluData: blck)
 template init*(T: type ForkedTrustedSignedBeaconBlock, blck: gloas.TrustedSignedBeaconBlock): T =
   T(kind: ConsensusFork.Gloas, gloasData: blck)
-template init*(T: type ForkedTrustedSignedBeaconBlock, blck: heze.TrustedSignedBeaconBlock): T =
-  T(kind: ConsensusFork.Heze, hezeData: blck)
 
 template toString*(kind: ConsensusFork): string =
   $kind
 
 template init*(T: typedesc[ConsensusFork], value: string): Opt[ConsensusFork] =
   case value
-  of "heze":
-    Opt.some ConsensusFork.Heze
   of "gloas":
     Opt.some ConsensusFork.Gloas
   of "fulu":
@@ -995,10 +939,6 @@ static:
 
 template withState*(x: ForkedHashedBeaconState, body: untyped): untyped =
   case x.kind
-  of ConsensusFork.Heze:
-    const consensusFork {.inject, used.} = ConsensusFork.Heze
-    template forkyState: untyped {.inject, used.} = x.hezeData
-    body
   of ConsensusFork.Gloas:
     const consensusFork {.inject, used.} = ConsensusFork.Gloas
     template forkyState: untyped {.inject, used.} = x.gloasData
@@ -1038,9 +978,7 @@ template forky*(
       ForkedSignedBeaconBlock |
       ForkedHashedBeaconState,
     kind: static ConsensusFork): untyped =
-  when kind == ConsensusFork.Heze:
-    x.hezeData
-  elif kind == ConsensusFork.Gloas:
+  when kind == ConsensusFork.Gloas:
     x.gloasData
   elif kind == ConsensusFork.Fulu:
     x.fuluData
@@ -1160,8 +1098,6 @@ func get_blob_parameters*(cfg: RuntimeConfig, epoch: Epoch): BlobParameters =
 func consensusForkEpoch*(
     cfg: RuntimeConfig, consensusFork: ConsensusFork): Epoch =
   case consensusFork
-  of ConsensusFork.Heze:
-    cfg.HEZE_FORK_EPOCH
   of ConsensusFork.Gloas:
     cfg.GLOAS_FORK_EPOCH
   of ConsensusFork.Fulu:
@@ -1182,8 +1118,7 @@ func consensusForkEpoch*(
 func consensusForkAtEpoch*(cfg: RuntimeConfig, epoch: Epoch): ConsensusFork =
   ## Return the current fork for the given epoch.
   static:
-    doAssert high(ConsensusFork) == ConsensusFork.Heze
-    doAssert ConsensusFork.Heze      > ConsensusFork.Gloas
+    doAssert high(ConsensusFork) == ConsensusFork.Gloas
     doAssert ConsensusFork.Gloas     > ConsensusFork.Fulu
     doAssert ConsensusFork.Fulu      > ConsensusFork.Electra
     doAssert ConsensusFork.Electra   > ConsensusFork.Deneb
@@ -1193,8 +1128,7 @@ func consensusForkAtEpoch*(cfg: RuntimeConfig, epoch: Epoch): ConsensusFork =
     doAssert ConsensusFork.Altair    > ConsensusFork.Phase0
     doAssert GENESIS_EPOCH == 0
 
-  if   epoch >= cfg.HEZE_FORK_EPOCH:      ConsensusFork.Heze
-  elif epoch >= cfg.GLOAS_FORK_EPOCH:     ConsensusFork.Gloas
+  if   epoch >= cfg.GLOAS_FORK_EPOCH:     ConsensusFork.Gloas
   elif epoch >= cfg.FULU_FORK_EPOCH:      ConsensusFork.Fulu
   elif epoch >= cfg.ELECTRA_FORK_EPOCH:   ConsensusFork.Electra
   elif epoch >= cfg.DENEB_FORK_EPOCH:     ConsensusFork.Deneb
@@ -1319,10 +1253,6 @@ template withBlck*(
     const consensusFork {.inject, used.} = ConsensusFork.Gloas
     template forkyBlck: untyped {.inject, used.} = x.gloasData
     body
-  of ConsensusFork.Heze:
-    const consensusFork {.inject, used.} = ConsensusFork.Heze
-    template forkyBlck: untyped {.inject, used.} = x.hezeData
-    body
 
 func hash_tree_root*(x: ForkedBeaconBlock): Eth2Digest =
   withBlck(x): hash_tree_root(forkyBlck)
@@ -1368,12 +1298,6 @@ template withForkyMaybeBlindedBlck*(
     body: untyped): untyped =
   debugGloasComment "re-add mev to gloas"
   case b.kind
-  of ConsensusFork.Heze:
-    const
-      consensusFork {.inject, used.} = ConsensusFork.Heze
-      isBlinded {.inject, used.} = false
-    template forkyMaybeBlindedBlck: untyped {.inject, used.} = b.hezeData
-    body
   of ConsensusFork.Gloas:
     const
       consensusFork {.inject, used.} = ConsensusFork.Gloas
@@ -1451,11 +1375,6 @@ template withStateAndBlck*(
        ForkedTrustedSignedBeaconBlock,
     body: untyped): untyped =
   case s.kind
-  of ConsensusFork.Heze:
-    const consensusFork {.inject, used.} = ConsensusFork.Heze
-    template forkyState: untyped {.inject.} = s.hezeData
-    template forkyBlck: untyped {.inject.} = b.hezeData
-    body
   of ConsensusFork.Gloas:
     const consensusFork {.inject, used.} = ConsensusFork.Gloas
     template forkyState: untyped {.inject.} = s.gloasData
@@ -1499,10 +1418,6 @@ template withStateAndBlck*(
 
 template withAttestation*(a: ForkedAttestation, body: untyped): untyped =
   case a.kind
-  of ConsensusFork.Heze:
-    const consensusFork {.inject, used.} = ConsensusFork.Heze
-    template forkyAttestation: untyped {.inject.} = a.hezeData
-    body
   of ConsensusFork.Gloas:
     const consensusFork {.inject, used.} = ConsensusFork.Gloas
     template forkyAttestation: untyped {.inject.} = a.gloasData
@@ -1539,10 +1454,6 @@ template withAttestation*(a: ForkedAttestation, body: untyped): untyped =
 template withAggregateAndProof*(a: ForkedAggregateAndProof,
                                 body: untyped): untyped =
   case a.kind
-  of ConsensusFork.Heze:
-    const consensusFork {.inject, used.} = ConsensusFork.Heze
-    template forkyProof: untyped {.inject.} = a.hezeData
-    body
   of ConsensusFork.Gloas:
     const consensusFork {.inject, used.} = ConsensusFork.Gloas
     template forkyProof: untyped {.inject.} = a.gloasData
@@ -1656,7 +1567,6 @@ func hezeFork*(cfg: RuntimeConfig): Fork =
 
 func forkAtEpoch*(cfg: RuntimeConfig, epoch: Epoch): Fork =
   case cfg.consensusForkAtEpoch(epoch)
-  of ConsensusFork.Heze:      cfg.hezeFork
   of ConsensusFork.Gloas:     cfg.gloasFork
   of ConsensusFork.Fulu:      cfg.fuluFork
   of ConsensusFork.Electra:   cfg.electraFork
@@ -1668,7 +1578,6 @@ func forkAtEpoch*(cfg: RuntimeConfig, epoch: Epoch): Fork =
 
 func forkVersionAtEpoch*(cfg: RuntimeConfig, epoch: Epoch): Version =
   case cfg.consensusForkAtEpoch(epoch)
-  of ConsensusFork.Heze:      cfg.HEZE_FORK_VERSION
   of ConsensusFork.Gloas:     cfg.GLOAS_FORK_VERSION
   of ConsensusFork.Fulu:      cfg.FULU_FORK_VERSION
   of ConsensusFork.Electra:   cfg.ELECTRA_FORK_VERSION
@@ -1741,8 +1650,7 @@ func getForkSchedule*(cfg: RuntimeConfig): array[8, Fork] =
   ## This procedure is used by HTTP REST framework and validator client.
   ##
   ## NOTE: Update this procedure when new fork will be scheduled.
-  debugHezeComment "add hezeFork to getForkSchedule"
-  static: doAssert high(ConsensusFork) == ConsensusFork.Heze
+  static: doAssert high(ConsensusFork) == ConsensusFork.Gloas
   [cfg.genesisFork(), cfg.altairFork(), cfg.bellatrixFork(), cfg.capellaFork(),
    cfg.denebFork(), cfg.electraFork(), cfg.fuluFork(), cfg.gloasFork()]
 
@@ -1874,9 +1782,7 @@ func init*(T: type ForkDigests,
           @[(cfg.FULU_FORK_EPOCH, ConsensusFork.Fulu, compute_fork_digest_fulu(
             cfg, genesis_validators_root, cfg.FULU_FORK_EPOCH)),
            (cfg.GLOAS_FORK_EPOCH, ConsensusFork.Gloas, compute_fork_digest_fulu(
-            cfg, genesis_validators_root, cfg.GLOAS_FORK_EPOCH)),
-           (cfg.HEZE_FORK_EPOCH, ConsensusFork.Heze, compute_fork_digest_fulu(
-            cfg, genesis_validators_root, cfg.HEZE_FORK_EPOCH))] &
+            cfg, genesis_validators_root, cfg.GLOAS_FORK_EPOCH))] &
           mapIt(cfg.BLOB_SCHEDULE, (
             it.EPOCH,
             consensusForkAtEpoch(cfg, it.EPOCH),
@@ -1984,12 +1890,6 @@ template init*(T: type ForkedMaybeBlindedBeaconBlock,
     gloasData: blck)
 
 template init*(T: type ForkedMaybeBlindedBeaconBlock,
-               blck: heze.BlockContents): T =
-  ForkedMaybeBlindedBeaconBlock(
-    kind: ConsensusFork.Heze,
-    hezeData: blck)
-
-template init*(T: type ForkedMaybeBlindedBeaconBlock,
                blck: fulu_mev.BlindedBeaconBlock,
                evalue: Opt[UInt256], cvalue: Opt[UInt256]): T =
   ForkedMaybeBlindedBeaconBlock(
@@ -2012,8 +1912,6 @@ template init*(T: type ForkedAttestation,
     ForkedAttestation(kind: ConsensusFork.Fulu, fuluData: attestation)
   of ConsensusFork.Gloas:
     ForkedAttestation(kind: ConsensusFork.Gloas, gloasData: attestation)
-  of ConsensusFork.Heze:
-    ForkedAttestation(kind: ConsensusFork.Heze, hezeData: attestation)
 
 template init*(T: type ForkedAggregateAndProof,
                proof: electra.AggregateAndProof,
@@ -2028,8 +1926,6 @@ template init*(T: type ForkedAggregateAndProof,
     ForkedAggregateAndProof(kind: ConsensusFork.Fulu, fuluData: proof)
   of ConsensusFork.Gloas:
     ForkedAggregateAndProof(kind: ConsensusFork.Gloas, gloasData: proof)
-  of ConsensusFork.Heze:
-    ForkedAggregateAndProof(kind: ConsensusFork.Heze, hezeData: proof)
 
 func kzg_commitments*(eps: ForkyExecutionPayloadForSigning): KzgCommitments =
   when typeof(eps).kind >= ConsensusFork.Deneb:
