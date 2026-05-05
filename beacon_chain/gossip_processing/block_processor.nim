@@ -36,7 +36,7 @@ from ../validators/validator_monitor import
   registerSyncAggregateInBlock
 from ../beacon_chain_db import
   containsExecutionPayloadEnvelope, getBlobSidecar, getDataColumnSidecar,
-  putBlobSidecar, putDataColumnSidecar
+  putBlobSidecar, putDataColumnSidecars
 
 export sszdump, signatures_batch
 
@@ -236,8 +236,7 @@ proc storeSidecars(
     sidecarsOpt: Opt[fulu.DataColumnSidecars] | Opt[gloas.DataColumnSidecars]
 ) =
   if sidecarsOpt.isSome():
-    for c in sidecarsOpt[]:
-      self.consensusManager.dag.db.putDataColumnSidecar(c[])
+    self.consensusManager.dag.db.putDataColumnSidecars(sidecarsOpt[])
 
 proc storeSidecars(self: BlockProcessor, sidecarsOpt: NoSidecars) =
   discard
