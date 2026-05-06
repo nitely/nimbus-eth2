@@ -1072,6 +1072,10 @@ proc validateExecutionPayload*(
             break
       seen
   if not blockSeen:
+    # TODO: when the envelope arrives before its block, we return IGNORE which
+    # prevents it from being forwarded to peers. The envelope is quarantined and
+    # processed locally once the block arrives, but never re-gossiped to peers
+    # who may also be missing it.
     discard quarantine[].addMissing(envelope.beacon_block_root)
     envelopeQuarantine[].addOrphan(signed_execution_payload_envelope)
     return errIgnore("ExecutionPayload: block not found")
@@ -1129,19 +1133,27 @@ proc validateExecutionPayload*(
 
   # [REJECT] `signed_execution_payload_envelope.signature` is valid as verified
   # by `verify_execution_payload_envelope_signature`.
-  if dag.headState.kind >= ConsensusFork.Gloas:
-    let builderKey = dag.validatorKey(blck.builder_index).valueOr:
-      return dag.checkedReject("ExecutionPayload: unknown builder")
-    if not verify_execution_payload_envelope_signature(
-        dag.forkAtEpoch(envelope.slot.epoch),
-        dag.genesis_validators_root,
-        envelope.slot.epoch,
-        signed_execution_payload_envelope.message,
-        builderKey,
-        signed_execution_payload_envelope.signature):
-      return dag.checkedReject("ExecutionPayload: invalid builder signature")
-  else:
-    return dag.checkedReject("ExecutionPayload: invalid fork")
+  # TODO: headState may not match the envelope's fork during extended
+  # non-finality.
+  let builderKey =
+    withState(dag.headState):
+      when consensusFork >= ConsensusFork.Gloas:
+        if bid.builder_index == BUILDER_INDEX_SELF_BUILD:
+          forkyState.data.validators.item(blck.proposer_index).pubkey
+        else:
+          if bid.builder_index >= forkyState.data.builders.lenu64:
+            return dag.checkedReject("ExecutionPayload: unknown builder")
+          forkyState.data.builders.item(bid.builder_index).pubkey
+      else:
+        return dag.checkedReject("ExecutionPayload: invalid fork")
+  if not verify_execution_payload_envelope_signature(
+      dag.forkAtEpoch(envelope.slot.epoch),
+      dag.genesis_validators_root,
+      envelope.slot.epoch,
+      signed_execution_payload_envelope.message,
+      builderKey,
+      signed_execution_payload_envelope.signature):
+    return dag.checkedReject("ExecutionPayload: invalid builder signature")
 
   ok()
 
