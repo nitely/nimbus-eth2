@@ -403,6 +403,8 @@ template validateBeaconBlockDeneb(
 
 template validateBeaconBlockGloas(
     _: ChainDAGRef,
+    _: ref Quarantine,
+    _: ref EnvelopeQuarantine,
     _:
       phase0.SignedBeaconBlock | altair.SignedBeaconBlock |
       bellatrix.SignedBeaconBlock | capella.SignedBeaconBlock |
@@ -414,9 +416,41 @@ template validateBeaconBlockGloas(
 # https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.5/specs/gloas/p2p-interface.md#beacon_block
 template validateBeaconBlockGloas(
     dag: ChainDAGRef,
+    quarantine: ref Quarantine,
+    envelopeQuarantine: ref EnvelopeQuarantine,
     signed_beacon_block: gloas.SignedBeaconBlock): untyped =
   template blck: untyped = signed_beacon_block.message
   template bid: untyped = blck.body.signed_execution_payload_bid.message
+
+  let executionParent = block:
+    let
+      parent = dag.getBlockRef(bid.parent_block_root).valueOr:
+        return errIgnore("validateBeaconBlockGloas: parent not yet seen")
+      pBhash = dag.loadExecutionBlockHash(parent).valueOr:
+        return errIgnore("validateBeaconBlockGloas: cannot load block hash")
+    if pBhash == bid.parent_block_hash:
+      # Parent's payload status is FULL
+      parent.bid
+    else:
+      # Parent's payload status is EMPTY, i.e. check with grandparent.
+      let res = block:
+        if not isNil(parent.parent):
+          # Grandparent is non-finalized yet.
+          let gpBhash = dag.loadExecutionBlockHash(parent.parent).valueOr:
+            return errIgnore("validateBeaconBlockGloas: cannot load block hash")
+          (parent.parent.bid, gpBhash)
+        else:
+          # Grandparent should be either finalized or nonexistent.
+          let
+            gpBid = dag.parent(parent.bid).valueOr:
+              return errIgnore("validateBeaconBlockGloas: invalid execution parent")
+            gpBhash = dag.loadExecutionBlockHash(gpBid).valueOr:
+              return errIgnore("validateBeaconBlockGloas: cannot load block hash")
+          (gpBid, gpBhash)
+      if res[1] == bid.parent_block_hash:
+        res[0]
+      else:
+        return errIgnore("validateBeaconBlockGloas: invalid execution parent")
 
   # - [IGNORE] The block's parent execution payload (defined by
   #   bid.parent_block_hash) has been seen (via gossip or non-gossip sources)
@@ -428,17 +462,15 @@ template validateBeaconBlockGloas(
   #
   # - [REJECT] The block's execution payload parent (defined by
   #   bid.parent_block_hash) passes all validation.
-  let parent = dag.getBlockRef(bid.parent_block_root).valueOr:
-    return errIgnore("validateBeaconBlockGloas: parent not yet seen")
-  debugGloasComment("request missing envelope if not found in db")
-  debugGloasComment("revisit the naive parent.parent.isNil guard")
-  if not (
-      isParentBlockFull(dag, signed_beacon_block, parent) or
-      parent.parent.isNil or
-      isParentBlockFull(dag, signed_beacon_block, parent.parent)
+  if executionParent.root in envelopeQuarantine.unviable:
+    return dag.checkedReject("validateBeaconBlockGloas: invalid parent payload")
+  elif not (
+      dag.db.containsExecutionPayloadEnvelope(executionParent.root) or
+      executionParent.root in envelopeQuarantine.orphans
   ):
-    # REJECT only once EL verification complete and parent doesn't validate.
-    return errIgnore("validateBeaconBlockGloas: parent execution payload not yet verified")
+    envelopeQuarantine[].addMissing(executionParent.root)
+    discard quarantine[].addOrphan(dag.finalizedHead.slot, signed_beacon_block)
+    return errIgnore("validateBeaconBlockGloas: parent payload not yet seen")
 
   # [REJECT] The bid's parent (defined by `bid.parent_block_root`) equals the
   # block's parent (defined by `block.parent_root`).
@@ -826,7 +858,7 @@ proc validateDataColumnSidecar*(
 
   if not(isNil(onDataColumnSidecarCallback)):
     onDataColumnSidecarCallback DataColumnSidecarInfoObject(
-      block_root: block_root,
+      block_root: blockRoot,
       index: data_column_sidecar.index,
       slot: data_column_sidecar.slot,
       kzg_commitments: bid.blob_kzg_commitments)
@@ -838,6 +870,7 @@ proc validateDataColumnSidecar*(
 # https://github.com/ethereum/consensus-specs/blob/v1.6.1/specs/gloas/p2p-interface.md#beacon_block
 proc validateBeaconBlock*(
     dag: ChainDAGRef, quarantine: ref Quarantine,
+    envelopeQuarantine: ref EnvelopeQuarantine,
     signed_beacon_block: ForkySignedBeaconBlock,
     wallTime: BeaconTime, flags: UpdateFlags): Result[void, ValidationError] =
   # In general, checks are ordered from cheap to expensive. Especially, crypto
@@ -964,7 +997,8 @@ proc validateBeaconBlock*(
 
   dag.validateBeaconBlockDeneb(signed_beacon_block, wallTime)
 
-  dag.validateBeaconBlockGloas(signed_beacon_block)
+  dag.validateBeaconBlockGloas(
+    quarantine, envelopeQuarantine, signed_beacon_block)
 
   # [REJECT] The block is from a higher slot than its parent.
   if not (signed_beacon_block.message.slot > parent.bid.slot):
