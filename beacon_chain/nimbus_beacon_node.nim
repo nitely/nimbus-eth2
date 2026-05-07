@@ -1759,7 +1759,7 @@ proc pruneDataColumns(node: BeaconNode, slot: Slot) =
             consensusFork, blocks[int(i)].root)
     debug "pruned data columns", count, dataColumnPruneEpoch
 
-proc reconstructDataColumns(node: BeaconNode, slot: Slot) =
+proc reconstructDataColumns(node: BeaconNode, slot: Slot) {.async: (raises: []).} =
   # https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/fulu/das-core.md#reconstruction-and-cross-seeding
   # "If the node obtains 50%+ of all the columns, it SHOULD reconstruct the
   # full data matrix via the recover_matrix helper."
@@ -1806,8 +1806,8 @@ proc reconstructDataColumns(node: BeaconNode, slot: Slot) =
       let startTime = Moment.now()
 
       # Reconstruct columns
-      let recovered = recover_cells_and_proofs_parallel(
-        node.batchVerifier[].taskpool, columns).valueOr:
+      let recovered = await(recover_cells_and_proofs_parallel(
+        node.batchVerifier[].taskpool, columns)).valueOr:
           error "Data column reconstruction incomplete"
           return
       let rowCount = recovered.len
@@ -1836,16 +1836,20 @@ proc reconstructDataColumns(node: BeaconNode, slot: Slot) =
         inc reconCounter
       node.dag.db.putDataColumnSidecars(reconstructed)
 
-      let reconstructedTime = Moment.now()
-
       trace "Columns reconstructed",
         columns = reconCounter,
         recoveryTime = recoveredTime - startTime,
-        reconstructionTime = reconstructedTime - recoveredTime
+        reconstructionTime = Moment.now() - recoveredTime
 
 proc onSlotEnd(node: BeaconNode, slot: Slot) {.async.} =
   # Things we do when slot processing has ended and we're about to wait for the
   # next slot
+
+  let reconstructFut =
+    if node.dag.cfg.consensusForkAtEpoch(slot.epoch()) >= ConsensusFork.Fulu:
+      reconstructDataColumns(node, slot)
+    else:
+      nil
 
   # By waiting until close before slot end, ensure that preparation for next
   # slot does not interfere with propagation of messages and with VC duties.
@@ -1859,8 +1863,8 @@ proc onSlotEnd(node: BeaconNode, slot: Slot) {.async.} =
     debug "Waiting for slot end", slot, endCutoff = shortLog(endCutoff.offset)
     await sleepAsync(endCutoff.offset)
 
-  if node.dag.cfg.consensusForkAtEpoch(slot.epoch()) >= ConsensusFork.Fulu:
-    reconstructDataColumns(node, slot)
+  if not reconstructFut.isNil:
+    await reconstructFut
 
   if node.dag.needStateCachesAndForkChoicePruning():
     if node.attachedValidators[].validators.len > 0:
