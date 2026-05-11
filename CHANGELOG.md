@@ -1,7 +1,7 @@
 2026-05-11 v26.5.0
 ==================
 
-The Nimbus consensus client `v26.5.0` is a `medium-urgency` release for Ethereum which improves performance and execution client compatibility.
+The Nimbus consensus client `v26.5.0` is a `medium-urgency` release which improves performance and execution client compatibility.
 
 ### Improvements
 
