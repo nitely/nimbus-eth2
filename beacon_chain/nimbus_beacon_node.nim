@@ -1790,9 +1790,9 @@ proc reconstructDataColumns(node: BeaconNode, slot: Slot) {.async: (raises: []).
 
       # Get columns from database
       for i in 0 ..< NUMBER_OF_COLUMNS.uint64:
-        var colData: fulu.DataColumnSidecar
-        if node.dag.db.getDataColumnSidecar(forkyBlck.root, i, colData):
-          columns.add(newClone(colData))
+        let colData = new fulu.DataColumnSidecar
+        if node.dag.db.getDataColumnSidecar(forkyBlck.root, i, colData[]):
+          columns.add(colData)
           indices.incl(i)
       trace "PeerDAS: Data columns before reconstruction", columns = indices.len
 
@@ -1826,14 +1826,15 @@ proc reconstructDataColumns(node: BeaconNode, slot: Slot) {.async: (raises: []).
         for j in 0 ..< rowCount:
           cells[j] = recovered[j].cells[i]
           proofs[j] = recovered[j].proofs[i]
-        reconstructed.add newClone(fulu.DataColumnSidecar(
+        reconstructed.add (ref fulu.DataColumnSidecar)(
           index: ColumnIndex(i),
           column: DataColumn.init(cells),
-          kzg_commitments: columns[0].kzg_commitments,
+          kzg_commitments: columns[0][].kzg_commitments,
           kzg_proofs: deneb.KzgProofs.init(proofs),
-          signed_block_header: forkyBlck.asSigned().toSignedBeaconBlockHeader(),
+          signed_block_header:
+            forkyBlck.asSigned().toSignedBeaconBlockHeader(),
           kzg_commitments_inclusion_proof:
-            columns[0].kzg_commitments_inclusion_proof))  # TODO might already have
+            columns[0][].kzg_commitments_inclusion_proof)  # TODO might already have
         inc reconCounter
       node.dag.db.putDataColumnSidecars(reconstructed)
 
@@ -2480,7 +2481,8 @@ proc installMessageValidators(node: BeaconNode) =
                 ): ValidationResult =
                   toValidationResult(
                     node.processor[].processDataColumnSidecar(
-                      MsgSource.gossip, dataColumnSidecar, subnet_id)))
+                      MsgSource.gossip, newClone(dataColumnSidecar),
+                      subnet_id)))
         elif consensusFork == ConsensusFork.Fulu:
           for it in 0'u64..<node.dag.cfg.NUMBER_OF_CUSTODY_GROUPS:
             closureScope:
@@ -2492,7 +2494,8 @@ proc installMessageValidators(node: BeaconNode) =
                 ): ValidationResult =
                   toValidationResult(
                     node.processor[].processDataColumnSidecar(
-                      MsgSource.gossip, dataColumnSidecar, subnet_id)))
+                      MsgSource.gossip, newClone(dataColumnSidecar),
+                      subnet_id)))
 
         when consensusFork in [ConsensusFork.Deneb, ConsensusFork.Electra]:
           # blob_sidecar_{subnet_id}
