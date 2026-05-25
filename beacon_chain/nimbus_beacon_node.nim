@@ -879,6 +879,7 @@ proc initFullNode(
                                                 node.eventBus.columnSidecarFullQueue,
                                                 node.blockProcessor,
                                                 node.dataColumnQuarantine,
+                                                gloasColumnQuarantine,
                                                 node.validatorCustody,
                                                 node.network)
   node.router = router
