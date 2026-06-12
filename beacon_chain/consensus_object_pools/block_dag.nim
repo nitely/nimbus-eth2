@@ -291,7 +291,13 @@ func executionParent*(blck: BlockRef): Opt[BlockRef] =
   Opt.none(BlockRef)
 
 func executionValid*(blck: BlockRef): bool =
-  blck.optimisticStatus == OptimisticStatus.valid
+  if blck.optimisticStatus == OptimisticStatus.valid:
+    return true
+
+  # Fallback to its execution parent if blck is not valid.
+  let parent = blck.executionParent.valueOr:
+    return false
+  parent.optimisticStatus == OptimisticStatus.valid
 
 proc markExecutionValid*(blck: BlockRef, valid: bool) =
   ## Mark a block as having a valid or invalid excecution payload
