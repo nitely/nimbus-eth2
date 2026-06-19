@@ -24,6 +24,7 @@ import
   ../beacon_clock,
   ./batch_validation
 
+from std/sequtils import findIt
 from libp2p/protocols/pubsub/errors import ValidationResult
 from ../consensus_object_pools/common_tools import
   is_gas_limit_target_compatible
@@ -1840,12 +1841,12 @@ proc validateLightClientOptimisticUpdate*(
   pool.latestForwardedOptimisticSlot = attested_slot
   ok()
 
-# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.8/specs/gloas/p2p-interface.md#execution_payload_bid
+# https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.10/specs/gloas/p2p-interface.md#execution_payload_bid
 proc validateExecutionPayloadBid*(
     dag: ChainDAGRef,
     executionPayloadBidPool: ref ExecutionPayloadBidPool,
     seenProposerPreferences:
-      var array[2, array[SLOTS_PER_EPOCH, Opt[ProposerPreferences]]],
+      var array[2, array[SLOTS_PER_EPOCH, seq[ProposerPreferences]]],
     signed_execution_payload_bid: gloas.SignedExecutionPayloadBid,
     wallTime: BeaconTime): Result[PayloadAvailability, ValidationError] =
   template bid: untyped = signed_execution_payload_bid.message
@@ -1902,15 +1903,16 @@ proc validateExecutionPayloadBid*(
         return errIgnore(
           "ExecutionPayloadBid: insufficient builder balance")
 
+      let bidDependentRoot = dag.get_dependent_root(parentBlck.bid, bid.slot)
       let seenPref = block:
         let
           seenBucket = uint64(bid.slot.epoch()) mod 2
           seenKey = uint64(bid.slot) mod SLOTS_PER_EPOCH
-        try:
-          seenProposerPreferences[seenBucket][seenKey].valueOr:
-            return dag.checkedReject("ExecutionPayloadBid: preferences have not seen")
-        except KeyError:
-          return dag.checkedReject("ExecutionPayloadBid: preferences have not seen")
+        template prefs: untyped = seenProposerPreferences[seenBucket][seenKey]
+        let idx = prefs.findIt(it.dependent_root == bidDependentRoot)
+        if idx < 0:
+          return dag.checkedReject("ExecutionPayloadBid: matching preferences not seen")
+        prefs[idx]
 
       # [IGNORE]
       # ... `is_gas_limit_target_compatible(parent_gas_limit, bid.gas_limit,
@@ -2057,7 +2059,7 @@ proc validatePayloadAttestationMessage*(
 # https://github.com/ethereum/consensus-specs/blob/v1.7.0-alpha.10/specs/gloas/p2p-interface.md#proposer_preferences
 proc validateProposerPreferences*(
     dag: ChainDAGRef,
-    seen: var array[2, array[SLOTS_PER_EPOCH, Opt[ProposerPreferences]]],
+    seen: var array[2, array[SLOTS_PER_EPOCH, seq[ProposerPreferences]]],
     signed_preferences: SignedProposerPreferences,
     wallTime: BeaconTime): Result[void, ValidationError] =
   template preferences: untyped = signed_preferences.message
@@ -2106,8 +2108,7 @@ proc validateProposerPreferences*(
   let
     bucket = proposalEpoch.uint64 mod 2
     slotInEpoch = preferences.proposal_slot.uint64 mod SLOTS_PER_EPOCH
-  if seen[bucket][slotInEpoch].isSome:
-    let existing = seen[bucket][slotInEpoch].get
+  for existing in seen[bucket][slotInEpoch]:
     if existing.dependent_root == preferences.dependent_root and
         existing.validator_index == preferences.validator_index:
       return errIgnore("ProposerPreferences: already seen")
@@ -2123,5 +2124,5 @@ proc validateProposerPreferences*(
       pubkey, signed_preferences.signature):
     return dag.checkedReject("ProposerPreferences: invalid signature")
 
-  seen[bucket][slotInEpoch] = Opt.some(preferences)
+  seen[bucket][slotInEpoch].add(preferences)
   ok()
