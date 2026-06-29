@@ -1,7 +1,7 @@
-2026-06-29 v26.6.1
+2026-06-29 v26.6.2
 ==================
 
-The Nimbus consensus client `v26.6.1` is a `medium-urgency` release which mitigates regressions in attestation performance and bandwidth usage in `v26.6.0`.
+The Nimbus consensus client `v26.6.2` is a `medium-urgency` release which mitigates regressions in attestation performance and bandwidth usage in `v26.6.0`.
 
 ### Fixes
 
