@@ -24,6 +24,13 @@ from std/algorithm import sort
 from std/sequtils import anyIt, mapIt, newSeqWith, repeat, toSeq
 from stew/staticfor import staticFor
 
+# Generics sandwich (https://github.com/nim-lang/Nim/issues/11225): because
+# `recover_cells_and_proofs_parallel` is generic, its body is semchecked at
+# each callsite, where every symbol it references must also be visible -
+# including the `threadsync` ones. Re-export them so callers don't have to
+# import `threadsync` themselves just to instantiate it.
+export threadsync
+
 type
   CellBytes = array[fulu.CELLS_PER_EXT_BLOB, Cell]
   ProofBytes = array[fulu.CELLS_PER_EXT_BLOB, KzgProof]
@@ -157,9 +164,12 @@ proc recover_matrix*(partial_matrix: seq[MatrixEntry],
 
 proc recover_cells_and_proofs_parallel*(
     tp: Taskpool,
-    dataColumns: seq[ref fulu.DataColumnSidecar]):
+    dataColumns: seq[ref fulu.DataColumnSidecar] |
+                 seq[ref gloas.DataColumnSidecar]):
     Future[Result[seq[CellsAndProofs], cstring]] {.async: (raises: []).} =
   ## Recover blobs from data column sidecars in parallel.
+  ## Only the `index`/`column` fields are consumed, which both the Fulu and
+  ## Gloas sidecar layouts share, so the input is a type class over either.
   ## - Uses Nim sequences with pointer passing for worker inputs
   ## - Bounds in-flight tasks to limit peak memory/alloc pressure.
   ## - Checks timeout before every spawn operation.

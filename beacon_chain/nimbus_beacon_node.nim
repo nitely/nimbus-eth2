@@ -17,15 +17,15 @@ import
   eth/enr/enr,
   eth/p2p/discoveryv5/random2,
   ./consensus_object_pools/[
-    blockchain_list, column_quarantine, envelope_quarantine,
-    execution_payload_pool, partial_column_quarantine,
+    blockchain_list, column_quarantine, column_reconstruction_backfiller,
+    envelope_quarantine, execution_payload_pool, partial_column_quarantine,
     payload_attestation_pool],
   ./consensus_object_pools/vanity_logs/vanity_logs,
   ./networking/[topic_params, network_metadata_downloads],
   ./rpc/[rest_api, state_ttl_cache],
   ./el/el_getblobs_service,
   ./spec/[
-    engine_authentication, weak_subjectivity, peerdas_helpers, column_map],
+    engine_authentication, weak_subjectivity, column_map],
   ./sync/[
     sync_protocol, light_client_protocol, sync_overseer, validator_custody],
   ./validators/[keystore_management, beacon_validators],
@@ -886,6 +886,20 @@ proc initFullNode(
                                                 config.partialColumns,
                                                 node.validatorCustody,
                                                 node.network)
+  node.columnReconstructionBackfiller =
+    ColumnReconstructionBackfillerRef.new(
+      node.dag,
+      node.validatorCustody,
+      node.batchVerifier[].taskpool)
+
+  # Re-evaluate a slot for reconstruction exactly when columns are persisted
+  # for it (gossip for the current slot, sync for history) rather than polling.
+  block:
+    let backfiller = node.columnReconstructionBackfiller
+    blockProcessor.onDataColumnsStored =
+      proc(slot: Slot) {.gcsafe, raises: [].} =
+        backfiller.onColumnsStored(slot)
+
   node.router = router
 
   await node.addValidators()
@@ -1684,99 +1698,9 @@ proc pruneDataColumns(node: BeaconNode, slot: Slot) =
         consensusFork, blocks[int(i)].root)
     debug "pruned data columns", count, dataColumnPruneEpoch
 
-proc reconstructDataColumns(node: BeaconNode, slot: Slot) {.async: (raises: []).} =
-  # https://github.com/ethereum/consensus-specs/blob/v1.6.0-beta.0/specs/fulu/das-core.md#reconstruction-and-cross-seeding
-  # "If the node obtains 50%+ of all the columns, it SHOULD reconstruct the
-  # full data matrix via the recover_matrix helper."
-  if node.config.lightSupernode:
-    return
-
-  if node.fuluColumnQuarantine.custodyColumns.lenu64 <
-      node.dag.cfg.NUMBER_OF_CUSTODY_GROUPS div 2:
-    return
-
-  # Currently, this logic is broken
-  if not node.config.debugEnableReconstruction:
-    return
-
-  logScope:
-    slot = slot
-
-  let blck = node.dag.getForkedBlock(node.dag.head.bid).valueOr:
-    warn "Failed to get the current slot head"
-    return
-
-  withBlck(blck):
-    when consensusFork >= ConsensusFork.Fulu:
-      var
-        columns: seq[ref fulu.DataColumnSidecar]
-        indices: HashSet[uint64]
-
-      # Get columns from database
-      for i in 0 ..< NUMBER_OF_COLUMNS.uint64:
-        let colData = new fulu.DataColumnSidecar
-        if node.dag.db.getDataColumnSidecar(forkyBlck.root, i, colData[]):
-          columns.add(colData)
-          indices.incl(i)
-      trace "PeerDAS: Data columns before reconstruction", columns = indices.len
-
-      # Make sure the node has obtained 50%+ of all the columns
-      if columns.lenu64 < (NUMBER_OF_COLUMNS div 2):
-        return
-      # Ignore if the node has already obtained all the columns
-      elif columns.lenu64 == NUMBER_OF_COLUMNS:
-        trace "The node has already obtained all the columns"
-        return
-
-      let startTime = Moment.now()
-
-      # Reconstruct columns
-      let recovered = await(recover_cells_and_proofs_parallel(
-        node.batchVerifier[].taskpool, columns)).valueOr:
-          error "Data column reconstruction incomplete"
-          return
-      let rowCount = recovered.len
-      var reconCounter = 0
-
-      let recoveredTime = Moment.now()
-
-      var reconstructed: seq[ref fulu.DataColumnSidecar]
-      for i in 0 ..< NUMBER_OF_COLUMNS.uint64:
-        if i in indices:
-          continue
-        var
-          cells = newSeq[Cell](rowCount)
-          proofs = newSeq[kzg.KzgProof](rowCount)
-        for j in 0 ..< rowCount:
-          cells[j] = recovered[j].cells[i]
-          proofs[j] = recovered[j].proofs[i]
-        reconstructed.add (ref fulu.DataColumnSidecar)(
-          index: ColumnIndex(i),
-          column: DataColumn.init(cells),
-          kzg_commitments: columns[0][].kzg_commitments,
-          kzg_proofs: deneb.KzgProofs.init(proofs),
-          signed_block_header:
-            forkyBlck.asSigned().toSignedBeaconBlockHeader(),
-          kzg_commitments_inclusion_proof:
-            columns[0][].kzg_commitments_inclusion_proof)  # TODO might already have
-        inc reconCounter
-      node.dag.db.putDataColumnSidecars(reconstructed)
-
-      trace "Columns reconstructed",
-        columns = reconCounter,
-        recoveryTime = recoveredTime - startTime,
-        reconstructionTime = Moment.now() - recoveredTime
-
 proc onSlotEnd(node: BeaconNode, slot: Slot) {.async.} =
   # Things we do when slot processing has ended and we're about to wait for the
   # next slot
-
-  let reconstructFut =
-    if slot.epoch() >= node.dag.cfg.FULU_FORK_EPOCH:
-      reconstructDataColumns(node, slot)
-    else:
-      nil
-
   # By waiting until close before slot end, ensure that preparation for next
   # slot does not interfere with propagation of messages and with VC duties.
   #
@@ -1790,9 +1714,6 @@ proc onSlotEnd(node: BeaconNode, slot: Slot) {.async.} =
   if endCutoff.inFuture:
     debug "Waiting for slot end", slot, endCutoff = shortLog(endCutoff.offset)
     await sleepAsync(endCutoff.offset)
-
-  if not reconstructFut.isNil:
-    await reconstructFut
 
   if node.dag.needStateCachesAndForkChoicePruning():
     if node.attachedValidators[].validators.len > 0:
@@ -2503,6 +2424,7 @@ proc run*(node: BeaconNode, stopper: StopFuture) {.raises: [CatchableError].} =
   node.requestManager.start()
   node.syncOverseer.start()
   asyncSpawn node.getBlobsService.run()
+  asyncSpawn node.columnReconstructionBackfiller.run()
 
   waitFor node.updateGossipStatus(wallSlot)
 
