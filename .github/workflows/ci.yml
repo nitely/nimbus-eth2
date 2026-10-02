@@ -72,7 +72,7 @@ jobs:
           echo "CI_CACHE=${{ runner.temp }}/.nbs-cache" >> $GITHUB_ENV
 
       - name: Clean workspace (very aggressive)
-        if: contains(matrix.builder)
+        if: contains(matrix.builder, 'self-hosted')
         run: rm -rf "$GITHUB_WORKSPACE"/*
 
       - name: Checkout
